@@ -1,0 +1,11 @@
+{
+  "rules": {
+    "notes": {
+      "$nom": {
+        ".read": true,
+        ".write": true,
+        ".validate": "newData.isString() && newData.val().length < 1000000"
+      }
+    }
+  }
+}

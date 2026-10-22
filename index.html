@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Note</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #fff; color: #111; }
+  body { display: flex; flex-direction: column; font: 16px/1.5 system-ui, sans-serif; }
+  textarea {
+    flex: 1; width: 100%; border: 0; outline: 0; resize: none;
+    padding: max(16px, env(safe-area-inset-top)) 16px 16px;
+    font: inherit; background: transparent; color: inherit;
+  }
+  nav {
+    display: flex; gap: 8px; padding: 8px 16px max(8px, env(safe-area-inset-bottom));
+    border-top: 1px solid #eee; align-items: center;
+  }
+  button {
+    font: inherit; padding: 8px 16px; border: 1px solid #ccc; border-radius: 8px;
+    background: #fff; color: inherit; cursor: pointer;
+  }
+  button:active { background: #f2f2f2; }
+  #etat { margin-left: auto; width: 10px; height: 10px; border-radius: 50%; background: #ccc; }
+  #etat.ok { background: #3a3; }
+  #etat.err { background: #d33; }
+  @media (prefers-color-scheme: dark) {
+    html, body { background: #111; color: #eee; }
+    nav { border-color: #333; }
+    button { background: #1c1c1c; border-color: #444; }
+    button:active { background: #2a2a2a; }
+  }
+</style>
+</head>
+<body>
+<textarea id="note" spellcheck="false" autofocus></textarea>
+<nav>
+  <button id="effacer">Effacer</button>
+  <button id="copier">Copier</button>
+  <span id="etat" title="Synchronisation"></span>
+</nav>
+<script src="config.js"></script>
+<script>
+(() => {
+  const note = document.getElementById('note');
+  const etat = document.getElementById('etat');
+  const nom = decodeURIComponent(location.hash.slice(1)) || 'note';
+  const url = `${DATABASE_URL.replace(/\/$/, '')}/notes/${encodeURIComponent(nom)}.json`;
+  const cle = 'note:' + nom;
+
+  let enAttente = false; // modifications locales pas encore envoyées
+  let minuteur;
+
+  note.value = localStorage.getItem(cle) || '';
+
+  function afficher(texte) {
+    if (texte === note.value) return;
+    const debut = note.selectionStart, fin = note.selectionEnd;
+    note.value = texte;
+    note.setSelectionRange(debut, fin);
+    localStorage.setItem(cle, texte);
+  }
+
+  async function envoyer() {
+    clearTimeout(minuteur);
+    const texte = note.value;
+    try {
+      const r = await fetch(url, { method: 'PUT', body: JSON.stringify(texte) });
+      if (!r.ok) throw new Error(r.status);
+      if (note.value === texte) enAttente = false;
+      etat.className = 'ok';
+    } catch {
+      etat.className = 'err';
+    }
+  }
+
+  note.addEventListener('input', () => {
+    enAttente = true;
+    localStorage.setItem(cle, note.value);
+    clearTimeout(minuteur);
+    minuteur = setTimeout(envoyer, 400);
+  });
+
+  // Flux temps réel Firebase (Server-Sent Events)
+  const flux = new EventSource(url);
+  flux.addEventListener('put', e => {
+    const { path, data } = JSON.parse(e.data);
+    if (path !== '/') return;
+    etat.className = 'ok';
+    // Ne pas écraser ce que l'on est en train de taper
+    if (!enAttente) afficher(typeof data === 'string' ? data : '');
+  });
+  flux.onerror = () => { etat.className = 'err'; };
+  flux.onopen = () => { etat.className = 'ok'; if (enAttente) envoyer(); };
+
+  document.getElementById('effacer').onclick = () => {
+    if (!note.value || !confirm('Effacer la note sur tous les appareils ?')) return;
+    note.value = '';
+    localStorage.setItem(cle, '');
+    enAttente = true;
+    envoyer();
+    note.focus();
+  };
+
+  document.getElementById('copier').onclick = async e => {
+    const bouton = e.currentTarget;
+    try {
+      await navigator.clipboard.writeText(note.value);
+    } catch {
+      note.select();
+      document.execCommand('copy');
+    }
+    bouton.textContent = 'Copié ✓';
+    setTimeout(() => { bouton.textContent = 'Copier'; }, 1200);
+  };
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+})();
+</script>
+</body>
+</html>
