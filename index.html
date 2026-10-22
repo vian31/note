@@ -11,115 +11,208 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <style>
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: #fff; color: #111; }
+  :root { --fond: #fff; --texte: #111; --bord: #e5e5e5; --bouton: #fff; --appui: #f2f2f2; --voile: rgba(0,0,0,.35); }
+  @media (prefers-color-scheme: dark) {
+    :root { --fond: #111; --texte: #eee; --bord: #333; --bouton: #1c1c1c; --appui: #2a2a2a; --voile: rgba(0,0,0,.6); }
+  }
+  html, body { margin: 0; height: 100%; background: var(--fond); color: var(--texte); }
   body { display: flex; flex-direction: column; font: 16px/1.5 system-ui, sans-serif; }
+  #onglets {
+    display: flex; padding: max(8px, env(safe-area-inset-top)) 16px 0;
+    border-bottom: 1px solid var(--bord);
+  }
+  #onglets button {
+    flex: 1; border: 0; border-radius: 0; background: none; padding: 8px 0;
+    border-bottom: 2px solid transparent; opacity: .5;
+  }
+  #onglets button[aria-selected="true"] { border-bottom-color: currentColor; opacity: 1; font-weight: 600; }
   textarea {
-    flex: 1; width: 100%; border: 0; outline: 0; resize: none;
-    padding: max(16px, env(safe-area-inset-top)) 16px 16px;
+    flex: 1; width: 100%; border: 0; outline: 0; resize: none; padding: 16px;
     font: inherit; background: transparent; color: inherit;
   }
   nav {
     display: flex; gap: 8px; padding: 8px 16px max(8px, env(safe-area-inset-bottom));
-    border-top: 1px solid #eee; align-items: center;
+    border-top: 1px solid var(--bord); align-items: center;
   }
   button {
-    font: inherit; padding: 8px 16px; border: 1px solid #ccc; border-radius: 8px;
-    background: #fff; color: inherit; cursor: pointer;
+    font: inherit; padding: 8px 16px; border: 1px solid var(--bord); border-radius: 8px;
+    background: var(--bouton); color: inherit; cursor: pointer;
   }
-  button:active { background: #f2f2f2; }
+  button:active { background: var(--appui); }
   #etat { margin-left: auto; width: 10px; height: 10px; border-radius: 50%; background: #ccc; }
   #etat.ok { background: #3a3; }
   #etat.err { background: #d33; }
-  @media (prefers-color-scheme: dark) {
-    html, body { background: #111; color: #eee; }
-    nav { border-color: #333; }
-    button { background: #1c1c1c; border-color: #444; }
-    button:active { background: #2a2a2a; }
+
+  #voile {
+    position: fixed; inset: 0; background: var(--voile);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
   }
+  #voile[hidden] { display: none; }
+  #popup {
+    background: var(--fond); border-radius: 12px; padding: 20px; width: 100%; max-width: 320px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.25);
+  }
+  #popup p { margin: 0 0 16px; }
+  #popup div { display: flex; gap: 8px; justify-content: flex-end; }
+  #popup .danger { background: #d33; border-color: #d33; color: #fff; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: 72px; transform: translateX(-50%);
+    background: var(--texte); color: var(--fond); padding: 8px 16px; border-radius: 8px;
+    opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  #toast.visible { opacity: 1; }
 </style>
 </head>
 <body>
+<div id="onglets" role="tablist">
+  <button role="tab">1</button>
+  <button role="tab">2</button>
+  <button role="tab">3</button>
+</div>
 <textarea id="note" spellcheck="false" autofocus></textarea>
 <nav>
   <button id="effacer">Effacer</button>
   <button id="copier">Copier</button>
   <span id="etat" title="Synchronisation"></span>
 </nav>
+<div id="voile" hidden>
+  <div id="popup" role="dialog" aria-modal="true">
+    <p id="message"></p>
+    <div>
+      <button id="annuler">Annuler</button>
+      <button id="valider" class="danger">Effacer</button>
+    </div>
+  </div>
+</div>
+<div id="toast" role="status"></div>
 <script src="config.js"></script>
 <script>
 (() => {
   const note = document.getElementById('note');
   const etat = document.getElementById('etat');
-  const nom = decodeURIComponent(location.hash.slice(1)) || 'note';
-  const url = `${DATABASE_URL.replace(/\/$/, '')}/notes/${encodeURIComponent(nom)}.json`;
-  const cle = 'note:' + nom;
+  const boutonsOnglets = [...document.querySelectorAll('#onglets button')];
+  const base = DATABASE_URL.replace(/\/$/, '');
 
-  let enAttente = false; // modifications locales pas encore envoyées
-  let minuteur;
+  // Une note par onglet ; « note » garde le contenu existant pour l'onglet 1
+  const onglets = ['note', 'note2', 'note3'].map(nom => ({
+    nom,
+    url: `${base}/notes/${nom}.json`,
+    cle: 'note:' + nom,
+    texte: localStorage.getItem('note:' + nom) || '',
+    enAttente: false, // modifications locales pas encore envoyées
+    minuteur: null,
+  }));
 
-  note.value = localStorage.getItem(cle) || '';
+  let actif = onglets[+localStorage.getItem('onglet')] || onglets[0];
+  let flux;
 
-  function afficher(texte) {
-    if (texte === note.value) return;
-    const debut = note.selectionStart, fin = note.selectionEnd;
-    note.value = texte;
-    note.setSelectionRange(debut, fin);
-    localStorage.setItem(cle, texte);
+  function memoriser(o, texte) {
+    o.texte = texte;
+    localStorage.setItem(o.cle, texte);
   }
 
-  async function envoyer() {
-    clearTimeout(minuteur);
-    const texte = note.value;
+  function afficher(o) {
+    if (o !== actif || o.texte === note.value) return;
+    const debut = note.selectionStart, fin = note.selectionEnd;
+    note.value = o.texte;
+    note.setSelectionRange(debut, fin);
+  }
+
+  async function envoyer(o) {
+    clearTimeout(o.minuteur);
+    const texte = o.texte;
     try {
-      const r = await fetch(url, { method: 'PUT', body: JSON.stringify(texte) });
+      const r = await fetch(o.url, { method: 'PUT', body: JSON.stringify(texte) });
       if (!r.ok) throw new Error(r.status);
-      if (note.value === texte) enAttente = false;
+      if (o.texte === texte) o.enAttente = false;
       etat.className = 'ok';
     } catch {
       etat.className = 'err';
     }
   }
 
+  // Flux temps réel Firebase (Server-Sent Events), seulement pour l'onglet affiché
+  // (une seule connexion ouverte : les navigateurs en limitent le nombre)
+  function ecouter(o) {
+    if (flux) flux.close();
+    flux = new EventSource(o.url);
+    flux.addEventListener('put', e => {
+      const { path, data } = JSON.parse(e.data);
+      if (path !== '/') return;
+      etat.className = 'ok';
+      // Ne pas écraser ce que l'on est en train de taper
+      if (o.enAttente) return;
+      memoriser(o, typeof data === 'string' ? data : '');
+      afficher(o);
+    });
+    flux.onerror = () => { etat.className = 'err'; };
+    flux.onopen = () => { etat.className = 'ok'; if (o.enAttente) envoyer(o); };
+  }
+
+  function choisir(o) {
+    actif = o;
+    boutonsOnglets.forEach((b, i) => b.setAttribute('aria-selected', onglets[i] === o));
+    note.value = o.texte;
+    localStorage.setItem('onglet', onglets.indexOf(o));
+    ecouter(o);
+  }
+
+  boutonsOnglets.forEach((b, i) => b.onclick = () => { if (onglets[i] !== actif) choisir(onglets[i]); });
+
   note.addEventListener('input', () => {
-    enAttente = true;
-    localStorage.setItem(cle, note.value);
-    clearTimeout(minuteur);
-    minuteur = setTimeout(envoyer, 400);
+    const o = actif;
+    o.enAttente = true;
+    memoriser(o, note.value);
+    clearTimeout(o.minuteur);
+    o.minuteur = setTimeout(() => envoyer(o), 400);
   });
 
-  // Flux temps réel Firebase (Server-Sent Events)
-  const flux = new EventSource(url);
-  flux.addEventListener('put', e => {
-    const { path, data } = JSON.parse(e.data);
-    if (path !== '/') return;
-    etat.className = 'ok';
-    // Ne pas écraser ce que l'on est en train de taper
-    if (!enAttente) afficher(typeof data === 'string' ? data : '');
-  });
-  flux.onerror = () => { etat.className = 'err'; };
-  flux.onopen = () => { etat.className = 'ok'; if (enAttente) envoyer(); };
+  // Popup de confirmation maison (remplace confirm())
+  const voile = document.getElementById('voile');
+  function confirmer(message) {
+    document.getElementById('message').textContent = message;
+    voile.hidden = false;
+    document.getElementById('valider').focus();
+    return new Promise(resoudre => {
+      const fermer = ok => { voile.hidden = true; voile.onclick = document.onkeydown = null; resoudre(ok); };
+      document.getElementById('valider').onclick = () => fermer(true);
+      document.getElementById('annuler').onclick = () => fermer(false);
+      voile.onclick = e => { if (e.target === voile) fermer(false); };
+      document.onkeydown = e => { if (e.key === 'Escape') fermer(false); };
+    });
+  }
 
-  document.getElementById('effacer').onclick = () => {
-    if (!note.value || !confirm('Effacer la note sur tous les appareils ?')) return;
-    note.value = '';
-    localStorage.setItem(cle, '');
-    enAttente = true;
-    envoyer();
-    note.focus();
+  const toast = document.getElementById('toast');
+  function annoncer(message) {
+    toast.textContent = message;
+    toast.classList.add('visible');
+    clearTimeout(toast.minuteur);
+    toast.minuteur = setTimeout(() => toast.classList.remove('visible'), 1500);
+  }
+
+  document.getElementById('effacer').onclick = async () => {
+    const o = actif;
+    if (!o.texte) return;
+    if (!await confirmer(`Effacer la note ${onglets.indexOf(o) + 1} sur tous les appareils ?`)) return;
+    memoriser(o, '');
+    afficher(o);
+    o.enAttente = true;
+    envoyer(o);
+    annoncer('Note effacée');
   };
 
-  document.getElementById('copier').onclick = async e => {
-    const bouton = e.currentTarget;
+  document.getElementById('copier').onclick = async () => {
     try {
       await navigator.clipboard.writeText(note.value);
     } catch {
       note.select();
       document.execCommand('copy');
     }
-    bouton.textContent = 'Copié ✓';
-    setTimeout(() => { bouton.textContent = 'Copier'; }, 1200);
+    annoncer(note.value ? 'Copié ✓' : 'Note vide');
   };
 
+  choisir(actif);
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 })();
 </script>

@@ -1,7 +1,7 @@
 # Note
 
 Bloc-note ultra simple synchronisé entre appareils (façon Framapad), en PWA.
-Une page blanche, un bouton **Effacer**, un bouton **Copier**. Aucune authentification.
+Trois onglets (trois notes), un bouton **Effacer**, un bouton **Copier**. Aucune authentification.
 
 GitHub Pages ne sert que des fichiers statiques : la synchronisation passe par une
 **Firebase Realtime Database** (gratuite), interrogée directement en REST + flux temps réel,
@@ -17,10 +17,6 @@ sans SDK.
 5. Sur GitHub : **Settings › Pages › Deploy from a branch** → branche `main`, dossier `/ (root)`.
 
 L'appli est alors sur <https://vian31.github.io/note/> ; « Ajouter à l'écran d'accueil » pour l'installer.
-
-## Plusieurs notes
-
-`https://vian31.github.io/note/#courses` ouvre une note distincte nommée « courses ».
 
 ## ⚠️ Confidentialité
 
