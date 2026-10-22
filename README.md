@@ -1,7 +1,7 @@
 # Note
 
 Bloc-note ultra simple synchronisé entre appareils (façon Framapad), en PWA.
-Trois onglets (trois notes), un bouton **Effacer**, un bouton **Copier**. Aucune authentification.
+Trois onglets renommables (toucher l'onglet affiché), un bouton **Effacer**, un bouton **Copier**. Aucune authentification.
 
 GitHub Pages ne sert que des fichiers statiques : la synchronisation passe par une
 **Firebase Realtime Database** (gratuite), interrogée directement en REST + flux temps réel,

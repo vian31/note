@@ -3,9 +3,9 @@
     "notes": {
       "$cle": {
         "$onglet": {
-          ".read": "$cle.length >= 22 && ($onglet == '1' || $onglet == '2' || $onglet == '3')",
-          ".write": "$cle.length >= 22 && ($onglet == '1' || $onglet == '2' || $onglet == '3')",
-          ".validate": "newData.isString() && newData.val().length < 1000000"
+          ".read": "$cle.length >= 22 && ($onglet == '1' || $onglet == '2' || $onglet == '3' || $onglet == 'n1' || $onglet == 'n2' || $onglet == 'n3')",
+          ".write": "$cle.length >= 22 && ($onglet == '1' || $onglet == '2' || $onglet == '3' || $onglet == 'n1' || $onglet == 'n2' || $onglet == 'n3')",
+          ".validate": "newData.isString() && newData.val().length <= ($onglet.beginsWith('n') ? 20 : 1000000)"
         }
       }
     }

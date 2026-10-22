@@ -23,8 +23,9 @@
     border-bottom: 1px solid var(--bord);
   }
   #onglets button {
-    flex: 1; border: 0; border-radius: 0; background: none; padding: 8px 0;
+    flex: 1; min-width: 0; border: 0; border-radius: 0; background: none; padding: 8px 4px;
     border-bottom: 2px solid transparent; opacity: .5;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   #onglets button[aria-selected="true"] { border-bottom-color: currentColor; opacity: 1; font-weight: 600; }
   textarea {
@@ -113,10 +114,11 @@
   // Popup maison (remplace confirm/prompt du navigateur)
   const voile = document.getElementById('voile');
   const champ = document.getElementById('champ');
-  function popup({ message, valeurChamp, boutons, fermable = true }) {
+  function popup({ message, valeurChamp, longueurMax, boutons, fermable = true }) {
     document.getElementById('message').textContent = message;
     champ.hidden = valeurChamp === undefined;
     champ.value = valeurChamp || '';
+    if (longueurMax) champ.maxLength = longueurMax; else champ.removeAttribute('maxlength');
     const zone = document.getElementById('boutons');
     zone.replaceChildren();
     voile.hidden = false;
@@ -213,6 +215,10 @@
     const texte = stock.lire(cache) || '';
     return {
       url: `${base}/notes/${cle}/${nom}.json`,
+      urlNom: `${base}/notes/${cle}/n${nom}.json`,
+      numero: nom,
+      nom: stock.lire(`${cache}:nom`) || '',
+      nomAEnvoyer: stock.lire(`${cache}:nom-a-envoyer`) === '1',
       cache,
       texte,
       depart: stock.lire(cache + ':depart') ?? texte,
@@ -417,6 +423,7 @@
   // (Firebase envoie un signal toutes les 30 s environ)
   function reprendre() {
     ecouter(actif);
+    lireNoms();
     onglets.forEach(o => { if (aEnvoyer(o)) envoyer(o); });
   }
   document.addEventListener('visibilitychange', () => {
@@ -429,6 +436,57 @@
     if (!fluxBloque && !document.hidden && (flux.readyState === EventSource.CLOSED || Date.now() - dernierSignal > 75000)) reprendre();
   }, 15000);
 
+  // ---- Noms des onglets (synchronisés, rarement modifiés : lus toutes les 10 s) ----
+  const titre = o => o.nom || o.numero;
+  function afficherNoms() {
+    boutonsOnglets.forEach((b, i) => { b.textContent = titre(onglets[i]); b.title = titre(onglets[i]); });
+  }
+
+  function definirNom(o, nom, aEnvoyer) {
+    o.nom = nom;
+    o.nomAEnvoyer = aEnvoyer;
+    stock.ecrire(o.cache + ':nom', nom);
+    stock.ecrire(o.cache + ':nom-a-envoyer', aEnvoyer ? '1' : '');
+    afficherNoms();
+  }
+
+  async function lireNoms() {
+    if (document.hidden) return;
+    await Promise.all(onglets.map(async o => {
+      if (o.nomAEnvoyer) return envoyerNom(o);
+      try {
+        const r = await fetch(`${o.urlNom}?t=${Date.now()}`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const nom = await r.json();
+        if (!o.nomAEnvoyer) definirNom(o, typeof nom === 'string' ? nom : '', false);
+      } catch {}
+    }));
+  }
+
+  async function envoyerNom(o) {
+    const nom = o.nom;
+    try {
+      const r = await fetch(o.urlNom, { method: 'PUT', body: JSON.stringify(nom) });
+      if (r.ok && o.nom === nom) definirNom(o, nom, false);
+    } catch {}
+  }
+
+  setInterval(lireNoms, 10000);
+
+  async function renommer(o) {
+    const r = await popup({
+      message: `Nom de l'onglet ${o.numero} (vide = « ${o.numero} »)`,
+      valeurChamp: o.nom,
+      longueurMax: 20,
+      boutons: [{ texte: 'Annuler', valeur: false }, { texte: 'Renommer', classe: 'principal', valeur: true }],
+    });
+    if (!r.valeur) return;
+    const nom = r.champ.slice(0, 20).trim();
+    if (nom === o.nom) return;
+    definirNom(o, nom, true);
+    envoyerNom(o);
+  }
+
   // ---- Interface ----
   function choisir(o) {
     actif = o;
@@ -438,7 +496,10 @@
     ecouter(o);
   }
 
-  boutonsOnglets.forEach((b, i) => b.onclick = () => { if (onglets[i] !== actif) choisir(onglets[i]); });
+  // Toucher l'onglet déjà affiché permet de le renommer
+  boutonsOnglets.forEach((b, i) => b.onclick = () => {
+    if (onglets[i] !== actif) choisir(onglets[i]); else renommer(actif);
+  });
 
   note.addEventListener('input', () => {
     definir(actif, { texte: note.value });
@@ -462,7 +523,7 @@
     const o = actif;
     if (!o.texte) return;
     const r = await popup({
-      message: `Effacer la note ${onglets.indexOf(o) + 1} sur tous les appareils ?`,
+      message: `Effacer « ${titre(o)} » sur tous les appareils ?`,
       boutons: [{ texte: 'Annuler', valeur: false }, { texte: 'Effacer', classe: 'danger', valeur: true }],
     });
     if (!r.valeur) return;
@@ -500,7 +561,9 @@
     annoncer('Lien copié ✓');
   };
 
+  afficherNoms();
   choisir(actif);
+  lireNoms();
   onglets.forEach(o => { if (aEnvoyer(o)) envoyer(o); });
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
