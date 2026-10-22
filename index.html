@@ -175,6 +175,9 @@
     cache: `note:${cle}:${nom}`,
     texte: localStorage.getItem(`note:${cle}:${nom}`) || '',
     enAttente: false, // modifications locales pas encore envoyées
+    enCours: false,   // envoi en cours
+    frappe: 0,        // heure de la dernière frappe
+    aRelire: false,   // une mise à jour distante a été ignorée
     minuteur: null,
   }));
 
@@ -187,7 +190,7 @@
   }
 
   let actif = onglets[+localStorage.getItem('onglet')] || onglets[0];
-  let flux;
+  let flux, dernierSignal = 0;
 
   function memoriser(o, texte) {
     o.texte = texte;
@@ -203,6 +206,8 @@
 
   async function envoyer(o) {
     clearTimeout(o.minuteur);
+    if (o.enCours) return; // la fin de l'envoi en cours relancera si besoin
+    o.enCours = true;
     const texte = o.texte;
     try {
       const r = await fetch(o.url, { method: 'PUT', body: JSON.stringify(texte) });
@@ -211,8 +216,10 @@
       etat.className = 'ok';
     } catch {
       etat.className = 'err';
-      o.minuteur = setTimeout(() => envoyer(o), 5000); // nouvel essai
     }
+    o.enCours = false;
+    if (o.enAttente) o.minuteur = setTimeout(() => envoyer(o), o.texte === texte ? 3000 : 400);
+    else if (o.aRelire && o === actif) ecouter(o); // la reconnexion renvoie la valeur actuelle
   }
 
   // Flux temps réel Firebase (Server-Sent Events), seulement pour l'onglet affiché
@@ -220,18 +227,38 @@
   function ecouter(o) {
     if (flux) flux.close();
     flux = new EventSource(o.url);
+    dernierSignal = Date.now();
     flux.addEventListener('put', e => {
+      dernierSignal = Date.now();
       const { path, data } = JSON.parse(e.data);
       if (path !== '/') return;
       etat.className = 'ok';
-      // Ne pas écraser ce que l'on est en train de taper
-      if (o.enAttente) return;
+      // Ne pas écraser ce que l'on est en train de taper ou d'envoyer ;
+      // sinon la version distante, plus récente, l'emporte
+      if (o.enCours || (o.enAttente && Date.now() - o.frappe < 2000)) { o.aRelire = true; return; }
+      clearTimeout(o.minuteur);
+      o.enAttente = o.aRelire = false;
       memoriser(o, typeof data === 'string' ? data : '');
       afficher(o);
     });
+    flux.addEventListener('keep-alive', () => { dernierSignal = Date.now(); });
     flux.onerror = () => { etat.className = 'err'; };
     flux.onopen = () => { etat.className = 'ok'; if (o.enAttente) envoyer(o); };
   }
+
+  // Les connexions meurent souvent sans prévenir (téléphone en veille, changement de réseau) :
+  // on se reconnecte au retour sur l'appli, au retour du réseau, ou après 75 s de silence
+  // (Firebase envoie un signal toutes les 30 s environ)
+  function reprendre() {
+    ecouter(actif);
+    onglets.forEach(o => { if (o.enAttente) envoyer(o); });
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) reprendre(); });
+  window.addEventListener('online', reprendre);
+  window.addEventListener('pageshow', e => { if (e.persisted) reprendre(); });
+  setInterval(() => {
+    if (!document.hidden && (flux.readyState === EventSource.CLOSED || Date.now() - dernierSignal > 75000)) reprendre();
+  }, 15000);
 
   function choisir(o) {
     actif = o;
@@ -246,6 +273,7 @@
   note.addEventListener('input', () => {
     const o = actif;
     o.enAttente = true;
+    o.frappe = Date.now();
     memoriser(o, note.value);
     clearTimeout(o.minuteur);
     o.minuteur = setTimeout(() => envoyer(o), 400);
