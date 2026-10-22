@@ -32,11 +32,11 @@
     font: inherit; background: transparent; color: inherit;
   }
   nav {
-    display: flex; gap: 8px; padding: 8px 16px max(8px, env(safe-area-inset-bottom));
+    display: flex; gap: 6px; padding: 8px 16px max(8px, env(safe-area-inset-bottom));
     border-top: 1px solid var(--bord); align-items: center;
   }
   button {
-    font: inherit; padding: 8px 16px; border: 1px solid var(--bord); border-radius: 8px;
+    font: inherit; padding: 8px 12px; border: 1px solid var(--bord); border-radius: 8px;
     background: var(--bouton); color: inherit; cursor: pointer;
   }
   button:active { background: var(--appui); }
@@ -82,6 +82,7 @@
 <nav>
   <button id="effacer">Effacer</button>
   <button id="copier">Copier</button>
+  <button id="synchro">Synchro</button>
   <button id="lien" title="Lien secret de ce bloc-notes" aria-label="Lien secret">🔗</button>
   <span id="etat" title="Synchronisation"></span>
 </nav>
@@ -238,14 +239,19 @@
     afficher(o);
   }
 
+  // Lecture directe ; le paramètre t évite les réponses mises en cache par un proxy
+  async function lire(o) {
+    const r = await fetch(`${o.url}?t=${Date.now()}`, { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    return r.json();
+  }
+
   async function sonder(o) {
     clearTimeout(minuteurSondage);
     if (!document.hidden) {
       const version = o.version;
       try {
-        const r = await fetch(o.url, { cache: 'no-store' });
-        if (!r.ok) throw new Error(r.status);
-        const data = await r.json();
+        const data = await lire(o);
         // Réponse périmée si une modification locale a eu lieu entre-temps
         if (o.version === version && o === actif) recevoir(o, data);
       } catch {
@@ -342,6 +348,25 @@
   document.getElementById('copier').onclick = async () => {
     await copier(note.value);
     annoncer(note.value ? 'Copié ✓' : 'Note vide');
+  };
+
+  // Synchro manuelle : envoyer ce qui est en attente, puis récupérer la version du serveur
+  document.getElementById('synchro').onclick = async () => {
+    const o = actif;
+    if (o.enAttente) await envoyer(o);
+    if (o.enAttente || o.enCours) { annoncer('Envoi impossible, réessayez'); return; }
+    try {
+      const data = await lire(o);
+      o.version++;
+      o.aRelire = false;
+      memoriser(o, typeof data === 'string' ? data : '');
+      afficher(o);
+      etat.className = 'ok';
+      annoncer('Synchronisé ✓');
+    } catch {
+      etat.className = 'err';
+      annoncer('Échec de la synchro');
+    }
   };
 
   document.getElementById('lien').onclick = async () => {
