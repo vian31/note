@@ -18,7 +18,11 @@ sans SDK.
 
 L'appli est alors sur <https://vian31.github.io/note/> ; « Ajouter à l'écran d'accueil » pour l'installer.
 
-## ⚠️ Confidentialité
+## Lien secret
 
-Sans authentification, toute personne qui connaît l'URL de la base peut lire et modifier
-les notes. N'y mettez rien de sensible.
+Au premier lancement, l'appli propose de créer un bloc-notes : une clé aléatoire est générée
+et placée dans l'adresse (`…/note/#clé`). Le bouton 🔗 affiche ce lien, à ouvrir sur les
+autres appareils (ou à coller dans la fenêtre d'accueil). Sans la clé, impossible de lire les
+notes : les règles Firebase interdisent de lister la base.
+
+⚠️ Toute personne qui possède le lien peut lire et modifier les notes : ne le partagez pas.

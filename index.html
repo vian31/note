@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
 <title>Note</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
@@ -39,7 +40,8 @@
     background: var(--bouton); color: inherit; cursor: pointer;
   }
   button:active { background: var(--appui); }
-  #etat { margin-left: auto; width: 10px; height: 10px; border-radius: 50%; background: #ccc; }
+  #lien { margin-left: auto; }
+  #etat { width: 10px; height: 10px; border-radius: 50%; background: #ccc; }
   #etat.ok { background: #3a3; }
   #etat.err { background: #d33; }
 
@@ -49,12 +51,18 @@
   }
   #voile[hidden] { display: none; }
   #popup {
-    background: var(--fond); border-radius: 12px; padding: 20px; width: 100%; max-width: 320px;
+    background: var(--fond); border-radius: 12px; padding: 20px; width: 100%; max-width: 360px;
     box-shadow: 0 10px 30px rgba(0,0,0,.25);
   }
   #popup p { margin: 0 0 16px; }
-  #popup div { display: flex; gap: 8px; justify-content: flex-end; }
+  #popup input {
+    width: 100%; margin: 0 0 16px; padding: 8px; font: 14px ui-monospace, monospace;
+    border: 1px solid var(--bord); border-radius: 8px; background: var(--appui); color: inherit;
+  }
+  #popup input[hidden] { display: none; }
+  #boutons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
   #popup .danger { background: #d33; border-color: #d33; color: #fff; }
+  #popup .principal { background: var(--texte); border-color: var(--texte); color: var(--fond); }
 
   #toast {
     position: fixed; left: 50%; bottom: 72px; transform: translateX(-50%);
@@ -74,42 +82,116 @@
 <nav>
   <button id="effacer">Effacer</button>
   <button id="copier">Copier</button>
+  <button id="lien" title="Lien secret de ce bloc-notes" aria-label="Lien secret">🔗</button>
   <span id="etat" title="Synchronisation"></span>
 </nav>
 <div id="voile" hidden>
   <div id="popup" role="dialog" aria-modal="true">
     <p id="message"></p>
-    <div>
-      <button id="annuler">Annuler</button>
-      <button id="valider" class="danger">Effacer</button>
-    </div>
+    <input id="champ" hidden autocomplete="off" spellcheck="false">
+    <div id="boutons"></div>
   </div>
 </div>
 <div id="toast" role="status"></div>
 <script src="config.js"></script>
 <script>
-(() => {
+(async () => {
   const note = document.getElementById('note');
   const etat = document.getElementById('etat');
   const boutonsOnglets = [...document.querySelectorAll('#onglets button')];
   const base = DATABASE_URL.replace(/\/$/, '');
+  const FORMAT_CLE = /^[A-Za-z0-9_-]{22,}$/;
 
-  // Une note par onglet ; « note » garde le contenu existant pour l'onglet 1
-  const onglets = ['note', 'note2', 'note3'].map(nom => ({
-    nom,
-    url: `${base}/notes/${nom}.json`,
-    cle: 'note:' + nom,
-    texte: localStorage.getItem('note:' + nom) || '',
+  // Popup maison (remplace confirm/prompt du navigateur)
+  const voile = document.getElementById('voile');
+  const champ = document.getElementById('champ');
+  function popup({ message, valeurChamp, boutons, fermable = true }) {
+    document.getElementById('message').textContent = message;
+    champ.hidden = valeurChamp === undefined;
+    champ.value = valeurChamp || '';
+    const zone = document.getElementById('boutons');
+    zone.replaceChildren();
+    voile.hidden = false;
+    return new Promise(resoudre => {
+      const fermer = valeur => {
+        voile.hidden = true;
+        voile.onclick = document.onkeydown = null;
+        resoudre({ valeur, champ: champ.value.trim() });
+      };
+      boutons.forEach(({ texte, classe, valeur }) => {
+        const b = document.createElement('button');
+        b.textContent = texte;
+        if (classe) b.className = classe;
+        b.onclick = () => fermer(valeur);
+        zone.append(b);
+      });
+      if (fermable) {
+        voile.onclick = e => { if (e.target === voile) fermer(null); };
+        document.onkeydown = e => { if (e.key === 'Escape') fermer(null); };
+      }
+      zone.lastChild.focus();
+    });
+  }
+
+  const toast = document.getElementById('toast');
+  function annoncer(message) {
+    toast.textContent = message;
+    toast.classList.add('visible');
+    clearTimeout(toast.minuteur);
+    toast.minuteur = setTimeout(() => toast.classList.remove('visible'), 1500);
+  }
+
+  // Clé secrète : dans l'adresse (#…), sinon mémorisée sur l'appareil
+  const extraireCle = texte => (texte.includes('#') ? texte.split('#').pop() : texte).trim();
+  const nouvelleCle = () => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(18))))
+    .replace(/\+/g, '-').replace(/\//g, '_');
+  const lienSecret = cle => location.href.split('#')[0] + '#' + cle;
+
+  let cle = extraireCle(location.hash.slice(1));
+  if (!FORMAT_CLE.test(cle)) cle = localStorage.getItem('cle') || '';
+  let creation = false;
+  while (!FORMAT_CLE.test(cle)) {
+    const r = await popup({
+      message: 'Collez le lien secret de votre bloc-notes (bouton 🔗 sur un appareil déjà configuré), ou créez-en un nouveau.',
+      valeurChamp: '',
+      fermable: false,
+      boutons: [
+        { texte: 'Nouveau', valeur: 'nouveau' },
+        { texte: 'Ouvrir', classe: 'principal', valeur: 'ouvrir' },
+      ],
+    });
+    if (r.valeur === 'nouveau') { cle = nouvelleCle(); creation = true; }
+    else { cle = extraireCle(r.champ); if (!FORMAT_CLE.test(cle)) annoncer('Lien invalide'); }
+  }
+  localStorage.setItem('cle', cle);
+  history.replaceState(null, '', lienSecret(cle));
+  window.addEventListener('hashchange', () => {
+    if (FORMAT_CLE.test(extraireCle(location.hash.slice(1)))) location.reload();
+  });
+
+  // Une note par onglet, rangée sous la clé secrète
+  const onglets = ['1', '2', '3'].map(nom => ({
+    url: `${base}/notes/${cle}/${nom}.json`,
+    cache: `note:${cle}:${nom}`,
+    texte: localStorage.getItem(`note:${cle}:${nom}`) || '',
     enAttente: false, // modifications locales pas encore envoyées
     minuteur: null,
   }));
+
+  // Nouveau bloc-notes : reprendre les notes de l'ancienne version (sans clé)
+  if (creation) {
+    ['note', 'note2', 'note3'].forEach((ancien, i) => {
+      const texte = localStorage.getItem('note:' + ancien);
+      if (texte) Object.assign(onglets[i], { texte, enAttente: true });
+    });
+  }
 
   let actif = onglets[+localStorage.getItem('onglet')] || onglets[0];
   let flux;
 
   function memoriser(o, texte) {
     o.texte = texte;
-    localStorage.setItem(o.cle, texte);
+    localStorage.setItem(o.cache, texte);
   }
 
   function afficher(o) {
@@ -129,6 +211,7 @@
       etat.className = 'ok';
     } catch {
       etat.className = 'err';
+      o.minuteur = setTimeout(() => envoyer(o), 5000); // nouvel essai
     }
   }
 
@@ -168,33 +251,27 @@
     o.minuteur = setTimeout(() => envoyer(o), 400);
   });
 
-  // Popup de confirmation maison (remplace confirm())
-  const voile = document.getElementById('voile');
-  function confirmer(message) {
-    document.getElementById('message').textContent = message;
-    voile.hidden = false;
-    document.getElementById('valider').focus();
-    return new Promise(resoudre => {
-      const fermer = ok => { voile.hidden = true; voile.onclick = document.onkeydown = null; resoudre(ok); };
-      document.getElementById('valider').onclick = () => fermer(true);
-      document.getElementById('annuler').onclick = () => fermer(false);
-      voile.onclick = e => { if (e.target === voile) fermer(false); };
-      document.onkeydown = e => { if (e.key === 'Escape') fermer(false); };
-    });
-  }
-
-  const toast = document.getElementById('toast');
-  function annoncer(message) {
-    toast.textContent = message;
-    toast.classList.add('visible');
-    clearTimeout(toast.minuteur);
-    toast.minuteur = setTimeout(() => toast.classList.remove('visible'), 1500);
+  async function copier(texte) {
+    try {
+      await navigator.clipboard.writeText(texte);
+    } catch {
+      const zone = document.createElement('textarea');
+      zone.value = texte;
+      document.body.append(zone);
+      zone.select();
+      document.execCommand('copy');
+      zone.remove();
+    }
   }
 
   document.getElementById('effacer').onclick = async () => {
     const o = actif;
     if (!o.texte) return;
-    if (!await confirmer(`Effacer la note ${onglets.indexOf(o) + 1} sur tous les appareils ?`)) return;
+    const r = await popup({
+      message: `Effacer la note ${onglets.indexOf(o) + 1} sur tous les appareils ?`,
+      boutons: [{ texte: 'Annuler', valeur: false }, { texte: 'Effacer', classe: 'danger', valeur: true }],
+    });
+    if (!r.valeur) return;
     memoriser(o, '');
     afficher(o);
     o.enAttente = true;
@@ -203,16 +280,23 @@
   };
 
   document.getElementById('copier').onclick = async () => {
-    try {
-      await navigator.clipboard.writeText(note.value);
-    } catch {
-      note.select();
-      document.execCommand('copy');
-    }
+    await copier(note.value);
     annoncer(note.value ? 'Copié ✓' : 'Note vide');
   };
 
+  document.getElementById('lien').onclick = async () => {
+    const r = await popup({
+      message: 'Lien secret de ce bloc-notes, à ouvrir sur vos autres appareils. Toute personne qui l\'a peut lire et modifier les notes.',
+      valeurChamp: lienSecret(cle),
+      boutons: [{ texte: 'Fermer', valeur: false }, { texte: 'Copier le lien', classe: 'principal', valeur: true }],
+    });
+    if (!r.valeur) return;
+    await copier(lienSecret(cle));
+    annoncer('Lien copié ✓');
+  };
+
   choisir(actif);
+  if (creation) onglets.forEach(o => { if (o.enAttente) envoyer(o); });
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 })();
 </script>

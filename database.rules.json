@@ -1,10 +1,12 @@
 {
   "rules": {
     "notes": {
-      "$nom": {
-        ".read": true,
-        ".write": true,
-        ".validate": "newData.isString() && newData.val().length < 1000000"
+      "$cle": {
+        "$onglet": {
+          ".read": "$cle.length >= 22 && ($onglet == '1' || $onglet == '2' || $onglet == '3')",
+          ".write": "$cle.length >= 22 && ($onglet == '1' || $onglet == '2' || $onglet == '3')",
+          ".validate": "newData.isString() && newData.val().length < 1000000"
+        }
       }
     }
   }
