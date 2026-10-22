@@ -178,6 +178,7 @@
     enCours: false,   // envoi en cours
     frappe: 0,        // heure de la dernière frappe
     aRelire: false,   // une mise à jour distante a été ignorée
+    version: 0,       // change à chaque modification ou envoi local
     minuteur: null,
   }));
 
@@ -191,6 +192,9 @@
 
   let actif = onglets[+localStorage.getItem('onglet')] || onglets[0];
   let flux, dernierSignal = 0;
+  // Plan B si le flux en direct n'arrive jamais (antivirus, proxy, pare-feu qui le retiennent) :
+  // interroger Firebase toutes les 3 s
+  let sondage = false, minuteurSondage, minuteurSecours;
 
   function memoriser(o, texte) {
     o.texte = texte;
@@ -208,6 +212,7 @@
     clearTimeout(o.minuteur);
     if (o.enCours) return; // la fin de l'envoi en cours relancera si besoin
     o.enCours = true;
+    o.version++;
     const texte = o.texte;
     try {
       const r = await fetch(o.url, { method: 'PUT', body: JSON.stringify(texte) });
@@ -222,24 +227,50 @@
     else if (o.aRelire && o === actif) ecouter(o); // la reconnexion renvoie la valeur actuelle
   }
 
+  function recevoir(o, data) {
+    etat.className = 'ok';
+    // Ne pas écraser ce que l'on est en train de taper ou d'envoyer ;
+    // sinon la version distante, plus récente, l'emporte
+    if (o.enCours || (o.enAttente && Date.now() - o.frappe < 2000)) { o.aRelire = true; return; }
+    clearTimeout(o.minuteur);
+    o.enAttente = o.aRelire = false;
+    memoriser(o, typeof data === 'string' ? data : '');
+    afficher(o);
+  }
+
+  async function sonder(o) {
+    clearTimeout(minuteurSondage);
+    if (!document.hidden) {
+      const version = o.version;
+      try {
+        const r = await fetch(o.url, { cache: 'no-store' });
+        if (!r.ok) throw new Error(r.status);
+        const data = await r.json();
+        // Réponse périmée si une modification locale a eu lieu entre-temps
+        if (o.version === version && o === actif) recevoir(o, data);
+      } catch {
+        etat.className = 'err';
+      }
+    }
+    if (sondage && o === actif) minuteurSondage = setTimeout(() => sonder(o), 3000);
+  }
+
   // Flux temps réel Firebase (Server-Sent Events), seulement pour l'onglet affiché
   // (une seule connexion ouverte : les navigateurs en limitent le nombre)
   function ecouter(o) {
     if (flux) flux.close();
+    clearTimeout(minuteurSondage);
+    clearTimeout(minuteurSecours);
+    if (sondage) { sonder(o); return; }
     flux = new EventSource(o.url);
     dernierSignal = Date.now();
+    // Firebase envoie la valeur dès l'ouverture : rien après 5 s = flux bloqué
+    minuteurSecours = setTimeout(() => { sondage = true; ecouter(o); }, 5000);
     flux.addEventListener('put', e => {
+      clearTimeout(minuteurSecours);
       dernierSignal = Date.now();
       const { path, data } = JSON.parse(e.data);
-      if (path !== '/') return;
-      etat.className = 'ok';
-      // Ne pas écraser ce que l'on est en train de taper ou d'envoyer ;
-      // sinon la version distante, plus récente, l'emporte
-      if (o.enCours || (o.enAttente && Date.now() - o.frappe < 2000)) { o.aRelire = true; return; }
-      clearTimeout(o.minuteur);
-      o.enAttente = o.aRelire = false;
-      memoriser(o, typeof data === 'string' ? data : '');
-      afficher(o);
+      if (path === '/') recevoir(o, data);
     });
     flux.addEventListener('keep-alive', () => { dernierSignal = Date.now(); });
     flux.onerror = () => { etat.className = 'err'; };
@@ -257,7 +288,7 @@
   window.addEventListener('online', reprendre);
   window.addEventListener('pageshow', e => { if (e.persisted) reprendre(); });
   setInterval(() => {
-    if (!document.hidden && (flux.readyState === EventSource.CLOSED || Date.now() - dernierSignal > 75000)) reprendre();
+    if (!sondage && !document.hidden && (flux.readyState === EventSource.CLOSED || Date.now() - dernierSignal > 75000)) reprendre();
   }, 15000);
 
   function choisir(o) {
@@ -274,6 +305,7 @@
     const o = actif;
     o.enAttente = true;
     o.frappe = Date.now();
+    o.version++;
     memoriser(o, note.value);
     clearTimeout(o.minuteur);
     o.minuteur = setTimeout(() => envoyer(o), 400);
