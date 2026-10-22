@@ -103,6 +103,13 @@
   const base = DATABASE_URL.replace(/\/$/, '');
   const FORMAT_CLE = /^[A-Za-z0-9_-]{22,}$/;
 
+  // Stockage local protégé (navigation privée, quota plein…)
+  const stock = {
+    lire(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    ecrire(k, v) { try { localStorage.setItem(k, v); } catch {} },
+    effacer(k) { try { localStorage.removeItem(k); } catch {} },
+  };
+
   // Popup maison (remplace confirm/prompt du navigateur)
   const voile = document.getElementById('voile');
   const champ = document.getElementById('champ');
@@ -116,7 +123,7 @@
     return new Promise(resoudre => {
       const fermer = valeur => {
         voile.hidden = true;
-        voile.onclick = document.onkeydown = null;
+        voile.onclick = document.onkeydown = champ.onkeydown = null;
         resoudre({ valeur, champ: champ.value.trim() });
       };
       boutons.forEach(({ texte, classe, valeur }) => {
@@ -126,11 +133,12 @@
         b.onclick = () => fermer(valeur);
         zone.append(b);
       });
+      champ.onkeydown = e => { if (e.key === 'Enter') fermer(boutons[boutons.length - 1].valeur); };
       if (fermable) {
         voile.onclick = e => { if (e.target === voile) fermer(null); };
         document.onkeydown = e => { if (e.key === 'Escape') fermer(null); };
       }
-      zone.lastChild.focus();
+      (champ.hidden ? zone.lastChild : champ).focus();
     });
   }
 
@@ -149,8 +157,7 @@
   const lienSecret = cle => location.href.split('#')[0] + '#' + cle;
 
   let cle = extraireCle(location.hash.slice(1));
-  if (!FORMAT_CLE.test(cle)) cle = localStorage.getItem('cle') || '';
-  let creation = false;
+  if (!FORMAT_CLE.test(cle)) cle = stock.lire('cle') || '';
   while (!FORMAT_CLE.test(cle)) {
     const r = await popup({
       message: 'Collez le lien secret de votre bloc-notes (bouton 🔗 sur un appareil déjà configuré), ou créez-en un nouveau.',
@@ -161,170 +168,281 @@
         { texte: 'Ouvrir', classe: 'principal', valeur: 'ouvrir' },
       ],
     });
-    if (r.valeur === 'nouveau') { cle = nouvelleCle(); creation = true; }
+    if (r.valeur === 'nouveau') cle = nouvelleCle();
     else { cle = extraireCle(r.champ); if (!FORMAT_CLE.test(cle)) annoncer('Lien invalide'); }
   }
-  localStorage.setItem('cle', cle);
+  stock.ecrire('cle', cle);
   history.replaceState(null, '', lienSecret(cle));
   window.addEventListener('hashchange', () => {
-    if (FORMAT_CLE.test(extraireCle(location.hash.slice(1)))) location.reload();
+    const autre = extraireCle(location.hash.slice(1));
+    if (FORMAT_CLE.test(autre) && autre !== cle) location.reload();
   });
+  // Restes de la toute première version (sans clé)
+  ['note:note', 'note:note2', 'note:note3'].forEach(stock.effacer);
 
-  // Une note par onglet, rangée sous la clé secrète
-  const onglets = ['1', '2', '3'].map(nom => ({
-    url: `${base}/notes/${cle}/${nom}.json`,
-    cache: `note:${cle}:${nom}`,
-    texte: localStorage.getItem(`note:${cle}:${nom}`) || '',
-    enAttente: false, // modifications locales pas encore envoyées
-    enCours: false,   // envoi en cours
-    frappe: 0,        // heure de la dernière frappe
-    aRelire: false,   // une mise à jour distante a été ignorée
-    version: 0,       // change à chaque modification ou envoi local
-    serveur: null,    // dernière version connue du serveur
-    minuteur: null,
-  }));
-
-  // Nouveau bloc-notes : reprendre les notes de l'ancienne version (sans clé)
-  if (creation) {
-    ['note', 'note2', 'note3'].forEach((ancien, i) => {
-      const texte = localStorage.getItem('note:' + ancien);
-      if (texte) Object.assign(onglets[i], { texte, enAttente: true });
-    });
+  // ---- Fusion de textes ----
+  // Zone modifiée entre deux textes : [debut, fin) dans a, remplacée par b.slice(debut, b.length - (a.length - fin))
+  function zoneModifiee(a, b) {
+    let debut = 0;
+    while (debut < a.length && debut < b.length && a[debut] === b[debut]) debut++;
+    let fin = 0;
+    while (fin < a.length - debut && fin < b.length - debut && a[a.length - 1 - fin] === b[b.length - 1 - fin]) fin++;
+    return { debut, fin: a.length - fin, remplacement: b.slice(debut, b.length - fin) };
   }
 
-  let actif = onglets[+localStorage.getItem('onglet')] || onglets[0];
-  let flux, dernierSignal = 0;
-  // En plus du flux en direct, Firebase est interrogé toutes les 2 s : certains proxys
-  // d'entreprise retiennent le flux ou ne le livrent que par paquets.
-  // Si le flux n'arrive jamais, on n'utilise plus que l'interrogation.
-  let sondage = false, minuteurSondage, minuteurSecours, tourSondage = 0;
+  // Fusion à trois : modifications locales et distantes faites depuis la même version de départ.
+  // Si elles touchent des endroits différents, les deux sont gardées ; sinon le texte local l'emporte.
+  function fusionner(depart, local, distant) {
+    if (local === depart || local === distant) return distant;
+    if (distant === depart) return local;
+    const l = zoneModifiee(depart, local), d = zoneModifiee(depart, distant);
+    if (l.fin <= d.debut)
+      return depart.slice(0, l.debut) + l.remplacement + depart.slice(l.fin, d.debut) + d.remplacement + depart.slice(d.fin);
+    if (d.fin <= l.debut)
+      return depart.slice(0, d.debut) + d.remplacement + depart.slice(d.fin, l.debut) + l.remplacement + depart.slice(l.fin);
+    return local;
+  }
 
-  function memoriser(o, texte) {
+  const cout = (a, b) => { const z = zoneModifiee(a, b); return z.fin - z.debut + z.remplacement.length; };
+
+  // ---- Notes ----
+  // texte : contenu local ; depart : dernière version du serveur connue (le texte local en dérive) ;
+  // les deux sont mémorisés, donc une modification non envoyée survit à la fermeture de l'appli.
+  const onglets = ['1', '2', '3'].map(nom => {
+    const cache = `note:${cle}:${nom}`;
+    const texte = stock.lire(cache) || '';
+    return {
+      url: `${base}/notes/${cle}/${nom}.json`,
+      cache,
+      texte,
+      depart: stock.lire(cache + ':depart') ?? texte,
+      peutEtre: stock.lire(cache + ':envoye'), // envoyé à la fermeture, sans savoir si c'est arrivé
+      etag: null,        // version du serveur correspondant à « depart », pour les envois conditionnels
+      enCours: null,     // texte en cours d'envoi
+      aRelire: false,    // un changement distant est arrivé pendant un envoi
+      echec: false,      // le dernier envoi a échoué
+      occupe: false,     // envoi en cours de préparation ou en vol
+      envois: 0,         // nombre d'envois terminés (détecte les lectures périmées)
+      attenteDepuis: 0,  // début des modifications non envoyées
+      minuteur: null,
+    };
+  });
+  const aEnvoyer = o => o.texte !== o.depart;
+
+  // Point d'état : rouge si la dernière lecture a échoué ou si un envoi est en échec
+  let lectureEnEchec = false;
+  function majEtat() {
+    etat.className = lectureEnEchec || onglets.some(o => o.echec) ? 'err' : 'ok';
+  }
+
+  let actif = onglets[+stock.lire('onglet')] || onglets[0];
+
+  function definir(o, { texte = o.texte, depart = o.depart }) {
+    const ancien = o.texte;
     o.texte = texte;
-    localStorage.setItem(o.cache, texte);
+    o.depart = depart;
+    stock.ecrire(o.cache, texte);
+    stock.ecrire(o.cache + ':depart', depart);
+    if (o === actif && note.value !== texte) afficher(ancien, texte);
   }
 
-  function afficher(o) {
-    if (o !== actif || o.texte === note.value) return;
-    const debut = note.selectionStart, fin = note.selectionEnd;
-    note.value = o.texte;
+  // Remplace le texte affiché en gardant le curseur au bon endroit
+  function afficher(ancien, nouveau) {
+    if (note.value !== ancien || document.activeElement !== note) { note.value = nouveau; return; }
+    const z = zoneModifiee(ancien, nouveau);
+    const decalage = nouveau.length - ancien.length;
+    const placer = pos => pos <= z.debut ? pos : pos >= z.fin ? pos + decalage : z.debut + z.remplacement.length;
+    const debut = placer(note.selectionStart), fin = placer(note.selectionEnd);
+    note.value = nouveau;
     note.setSelectionRange(debut, fin);
   }
 
-  async function envoyer(o) {
-    clearTimeout(o.minuteur);
-    if (o.enCours) return; // la fin de l'envoi en cours relancera si besoin
-    o.enCours = true;
-    o.version++;
-    const texte = o.texte;
-    try {
-      const r = await fetch(o.url, { method: 'PUT', body: JSON.stringify(texte) });
-      if (!r.ok) throw new Error(r.status);
-      o.serveur = texte;
-      if (o.texte === texte) o.enAttente = false;
-      etat.className = 'ok';
-    } catch {
-      etat.className = 'err';
+  // Version du serveur reçue (flux, interrogation, réponse à un envoi refusé)
+  function recevoir(o, distant, etag) {
+    distant = typeof distant === 'string' ? distant : '';
+    if (o.enCours !== null) {
+      if (distant !== o.enCours) o.aRelire = true; // à revoir une fois l'envoi terminé
+      return;
     }
-    o.enCours = false;
-    if (o.enAttente) o.minuteur = setTimeout(() => envoyer(o), o.texte === texte ? 3000 : 400);
-    else if (o.aRelire && o === actif) ecouter(o); // la reconnexion renvoie la valeur actuelle
+    if (o.peutEtre !== null) {
+      // L'envoi de dernière minute est-il arrivé ? La version de départ la plus probable
+      // est celle qui explique la version du serveur avec la plus petite modification.
+      if (cout(o.peutEtre, distant) < cout(o.depart, distant)) o.depart = o.peutEtre;
+      oublierPeutEtre(o);
+    }
+    if (distant === o.depart) { if (etag) o.etag = etag; return; }
+    o.etag = etag || null;
+    definir(o, { texte: fusionner(o.depart, o.texte, distant), depart: distant });
+    if (aEnvoyer(o)) planifier(o);
   }
 
-  function recevoir(o, data) {
-    etat.className = 'ok';
-    data = typeof data === 'string' ? data : '';
-    // Rien de nouveau sur le serveur : garder les modifications locales en attente
-    if (o.enAttente && data === o.serveur) return;
-    // Ne pas écraser ce que l'on est en train de taper ou d'envoyer ;
-    // sinon la version distante, plus récente, l'emporte
-    if (o.enCours || (o.enAttente && Date.now() - o.frappe < 2000)) { o.aRelire = true; return; }
-    clearTimeout(o.minuteur);
-    o.enAttente = o.aRelire = false;
-    o.serveur = data;
-    memoriser(o, data);
-    afficher(o);
-  }
+  const entetesLecture = { 'X-Firebase-ETag': 'true' };
+  // Sans étiquette de version (proxy qui la supprimerait), envoi non conditionnel
+  const entetesEnvoi = o => o.etag ? { ...entetesLecture, 'if-match': o.etag } : entetesLecture;
 
   // Lecture directe ; le paramètre t évite les réponses mises en cache par un proxy
   async function lire(o) {
-    const r = await fetch(`${o.url}?t=${Date.now()}`, { cache: 'no-store' });
-    if (!r.ok) throw new Error(r.status);
-    return r.json();
+    const envois = o.envois;
+    let r, data;
+    try {
+      r = await fetch(`${o.url}?t=${Date.now()}`, { cache: 'no-store', headers: entetesLecture });
+      if (!r.ok) throw new Error(r.status);
+      data = await r.json();
+      lectureEnEchec = false;
+    } catch (e) {
+      lectureEnEchec = true;
+      throw e;
+    } finally {
+      majEtat();
+    }
+    // Réponse périmée si un envoi a eu lieu entre-temps
+    if (o.envois === envois && o.enCours === null) recevoir(o, data, r.headers.get('ETag'));
   }
+
+  // Envoi conditionnel : refusé (412) si le serveur a changé depuis « depart »
+  async function envoyer(o) {
+    clearTimeout(o.minuteur);
+    o.minuteur = null;
+    if (o.occupe || !aEnvoyer(o)) return;
+    o.occupe = true; // un seul envoi à la fois par note
+    try {
+      if (!o.etag) await lire(o);
+      if (aEnvoyer(o)) {
+        const texte = o.texte;
+        o.enCours = texte;
+        o.attenteDepuis = 0;
+        let r;
+        try {
+          r = await fetch(o.url, { method: 'PUT', headers: entetesEnvoi(o), body: JSON.stringify(texte) });
+        } finally {
+          o.enCours = null;
+          o.envois++;
+        }
+        if (r.status === 412) {
+          // Quelqu'un a écrit entre-temps : fusionner avec sa version, puis renvoyer
+          o.etag = null;
+          recevoir(o, await r.json(), r.headers.get('ETag'));
+        } else if (r.ok) {
+          o.etag = r.headers.get('ETag');
+          definir(o, { depart: texte });
+          oublierPeutEtre(o);
+        } else {
+          throw new Error(r.status);
+        }
+      }
+      o.echec = false;
+    } catch {
+      o.echec = true;
+    } finally {
+      o.occupe = false;
+    }
+    majEtat();
+    if (o.echec) { o.minuteur = setTimeout(() => envoyer(o), 3000); return; }
+    if (o.aRelire) { o.aRelire = false; lire(o).catch(() => {}); }
+    if (aEnvoyer(o)) planifier(o, 0);
+  }
+
+  // Envoi 0,4 s après la dernière frappe, et au moins toutes les 1,5 s pendant une frappe continue
+  function planifier(o, delai = 400) {
+    const maintenant = Date.now();
+    o.attenteDepuis ||= maintenant;
+    clearTimeout(o.minuteur);
+    o.minuteur = setTimeout(() => envoyer(o), Math.min(delai, Math.max(0, o.attenteDepuis + 1500 - maintenant)));
+  }
+
+  function oublierPeutEtre(o) {
+    o.peutEtre = null;
+    stock.effacer(o.cache + ':envoye');
+  }
+
+  // Envoi de dernière minute quand l'appli passe en arrière-plan ou se ferme.
+  // Si la page survit, la réponse est traitée ; sinon le texte envoyé est mémorisé
+  // pour savoir, à la réouverture, s'il est arrivé.
+  function envoyerAvantFermeture() {
+    onglets.forEach(o => {
+      if (!aEnvoyer(o) || o.occupe || !o.etag) return; // seulement en envoi conditionnel
+      const texte = o.texte;
+      o.peutEtre = texte;
+      stock.ecrire(o.cache + ':envoye', texte);
+      o.occupe = true;
+      fetch(o.url, { method: 'PUT', keepalive: true, headers: entetesEnvoi(o), body: JSON.stringify(texte) })
+        .then(r => {
+          if (r.ok) { o.etag = r.headers.get('ETag'); o.envois++; definir(o, { depart: texte }); }
+          if (r.status === 412 || r.ok) oublierPeutEtre(o);
+        })
+        .catch(() => {})
+        .finally(() => { o.occupe = false; if (aEnvoyer(o) && !document.hidden) planifier(o, 0); });
+    });
+  }
+
+  // ---- Réception ----
+  // Flux en direct (Server-Sent Events) pour l'onglet affiché, plus une interrogation toutes les 2 s :
+  // certains proxys d'entreprise retiennent le flux ou ne le livrent que par paquets.
+  // Si le flux n'arrive jamais, on n'utilise plus que l'interrogation.
+  let flux, dernierSignal = 0;
+  let fluxBloque = false, minuteurSondage, minuteurSecours, tourSondage = 0;
 
   async function sonder(o) {
     clearTimeout(minuteurSondage);
     const tour = tourSondage;
     if (!document.hidden) {
-      const version = o.version;
-      try {
-        const data = await lire(o);
-        // Réponse périmée si une modification locale a eu lieu entre-temps
-        if (o.version === version && o === actif) recevoir(o, data);
-      } catch {
-        etat.className = 'err';
-      }
+      try { await lire(o); } catch {}
     }
     if (o === actif && tour === tourSondage) minuteurSondage = setTimeout(() => sonder(o), 2000);
   }
 
-  // Flux temps réel Firebase (Server-Sent Events), seulement pour l'onglet affiché
-  // (une seule connexion ouverte : les navigateurs en limitent le nombre)
   function ecouter(o) {
     if (flux) flux.close();
     clearTimeout(minuteurSondage);
     clearTimeout(minuteurSecours);
     tourSondage++;
-    if (sondage) { sonder(o); return; }
+    sonder(o);
+    if (fluxBloque) return;
     flux = new EventSource(o.url);
     dernierSignal = Date.now();
-    minuteurSondage = setTimeout(() => sonder(o), 2000);
     // Firebase envoie la valeur dès l'ouverture : rien après 5 s = flux bloqué
-    minuteurSecours = setTimeout(() => { sondage = true; ecouter(o); }, 5000);
+    minuteurSecours = setTimeout(() => { fluxBloque = true; flux.close(); }, 5000);
     flux.addEventListener('put', e => {
       clearTimeout(minuteurSecours);
       dernierSignal = Date.now();
       const { path, data } = JSON.parse(e.data);
-      if (path === '/') recevoir(o, data);
+      if (path === '/') recevoir(o, data, null);
     });
     flux.addEventListener('keep-alive', () => { dernierSignal = Date.now(); });
-    flux.onerror = () => { etat.className = 'err'; };
-    flux.onopen = () => { etat.className = 'ok'; if (o.enAttente) envoyer(o); };
+    flux.addEventListener('cancel', () => { lectureEnEchec = true; majEtat(); }); // accès refusé par les règles
   }
 
   // Les connexions meurent souvent sans prévenir (téléphone en veille, changement de réseau) :
-  // on se reconnecte au retour sur l'appli, au retour du réseau, ou après 75 s de silence
+  // on se reconnecte au retour sur l'appli, au retour du réseau, ou après 75 s de silence du flux
   // (Firebase envoie un signal toutes les 30 s environ)
   function reprendre() {
     ecouter(actif);
-    onglets.forEach(o => { if (o.enAttente) envoyer(o); });
+    onglets.forEach(o => { if (aEnvoyer(o)) envoyer(o); });
   }
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) reprendre(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) envoyerAvantFermeture(); else reprendre();
+  });
+  window.addEventListener('pagehide', envoyerAvantFermeture);
   window.addEventListener('online', reprendre);
   window.addEventListener('pageshow', e => { if (e.persisted) reprendre(); });
   setInterval(() => {
-    if (!sondage && !document.hidden && (flux.readyState === EventSource.CLOSED || Date.now() - dernierSignal > 75000)) reprendre();
+    if (!fluxBloque && !document.hidden && (flux.readyState === EventSource.CLOSED || Date.now() - dernierSignal > 75000)) reprendre();
   }, 15000);
 
+  // ---- Interface ----
   function choisir(o) {
     actif = o;
     boutonsOnglets.forEach((b, i) => b.setAttribute('aria-selected', onglets[i] === o));
     note.value = o.texte;
-    localStorage.setItem('onglet', onglets.indexOf(o));
+    stock.ecrire('onglet', onglets.indexOf(o));
     ecouter(o);
   }
 
   boutonsOnglets.forEach((b, i) => b.onclick = () => { if (onglets[i] !== actif) choisir(onglets[i]); });
 
   note.addEventListener('input', () => {
-    const o = actif;
-    o.enAttente = true;
-    o.frappe = Date.now();
-    o.version++;
-    memoriser(o, note.value);
-    clearTimeout(o.minuteur);
-    o.minuteur = setTimeout(() => envoyer(o), 400);
+    definir(actif, { texte: note.value });
+    planifier(actif);
   });
 
   async function copier(texte) {
@@ -348,9 +466,7 @@
       boutons: [{ texte: 'Annuler', valeur: false }, { texte: 'Effacer', classe: 'danger', valeur: true }],
     });
     if (!r.valeur) return;
-    memoriser(o, '');
-    afficher(o);
-    o.enAttente = true;
+    definir(o, { texte: '' });
     envoyer(o);
     annoncer('Note effacée');
   };
@@ -363,19 +479,12 @@
   // Synchro manuelle : envoyer ce qui est en attente, puis récupérer la version du serveur
   document.getElementById('synchro').onclick = async () => {
     const o = actif;
-    if (o.enAttente) await envoyer(o);
-    if (o.enAttente || o.enCours) { annoncer('Envoi impossible, réessayez'); return; }
+    await envoyer(o);
+    if (aEnvoyer(o)) { annoncer('Envoi impossible, réessayez'); return; }
     try {
-      const data = await lire(o);
-      o.version++;
-      o.aRelire = false;
-      o.serveur = typeof data === 'string' ? data : '';
-      memoriser(o, o.serveur);
-      afficher(o);
-      etat.className = 'ok';
+      await lire(o);
       annoncer('Synchronisé ✓');
     } catch {
-      etat.className = 'err';
       annoncer('Échec de la synchro');
     }
   };
@@ -392,8 +501,8 @@
   };
 
   choisir(actif);
-  if (creation) onglets.forEach(o => { if (o.enAttente) envoyer(o); });
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  onglets.forEach(o => { if (aEnvoyer(o)) envoyer(o); });
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
 </script>
 </body>

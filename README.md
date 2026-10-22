@@ -18,6 +18,15 @@ sans SDK.
 
 L'appli est alors sur <https://vian31.github.io/note/> ; « Ajouter à l'écran d'accueil » pour l'installer.
 
+## Synchronisation
+
+- Flux en direct Firebase pour l'onglet affiché, plus une lecture toutes les 2 s
+  (certains proxys d'entreprise retiennent le flux).
+- Envois conditionnels (ETag) : un appareil ne peut pas écraser une version qu'il n'a pas vue.
+  En cas d'écritures simultanées, les modifications sont fusionnées si elles touchent des
+  endroits différents ; sinon la version locale l'emporte.
+- Le texte non envoyé est conservé sur l'appareil (hors ligne, fermeture) et envoyé dès que possible.
+
 ## Lien secret
 
 Au premier lancement, l'appli propose de créer un bloc-notes : une clé aléatoire est générée
