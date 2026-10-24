@@ -17,7 +17,7 @@
     :root { --fond: #111; --texte: #eee; --bord: #333; --bouton: #1c1c1c; --appui: #2a2a2a; --voile: rgba(0,0,0,.6); }
   }
   html, body { margin: 0; height: 100%; background: var(--fond); color: var(--texte); }
-  body { display: flex; flex-direction: column; font: 16px/1.5 system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; font: 18px/1.5 system-ui, sans-serif; }
   #onglets {
     display: flex; padding: max(8px, env(safe-area-inset-top)) 16px 0;
     border-bottom: 1px solid var(--bord);
@@ -37,12 +37,12 @@
     border-top: 1px solid var(--bord); align-items: center;
   }
   button {
-    font: inherit; padding: 8px 12px; border: 1px solid var(--bord); border-radius: 8px;
+    font: inherit; padding: 8px 10px; border: 1px solid var(--bord); border-radius: 8px;
     background: var(--bouton); color: inherit; cursor: pointer;
   }
   button:active { background: var(--appui); }
   #lien { margin-left: auto; }
-  #etat { width: 10px; height: 10px; border-radius: 50%; background: #ccc; }
+  #etat { flex: none; width: 10px; height: 10px; border-radius: 50%; background: #ccc; }
   #etat.ok { background: #3a3; }
   #etat.err { background: #d33; }
 
