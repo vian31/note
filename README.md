@@ -24,6 +24,10 @@ Détection automatique : une ligne qui commence par `- `, `* `, `+ `, `• `, `�
 est reconnue comme élément de liste, et Entrée ouvre l'élément suivant (même repli sur les claviers de
 téléphone qui n'autorisent pas l'interception de la touche Entrée).
 
+Un retrait ouvre un sous-niveau d'un autre type (chapitres) : `1.` → `a)` → `1)` pour les numéros,
+`-` → `•` → `◦` pour les puces. En remontant d'un niveau, la numérotation reprend à la suite
+(`1.`, `a)`, `b)`, puis `2.`). Insérer ou décaler un élément renumérote les suivants.
+
 Boutons **• Puces**, **1. Liste**, **⇥ ⇤** (décaler). Au clavier : Entrée continue la liste (numéro suivant),
 Entrée sur un élément vide en sort, Tab / Maj+Tab décalent. C'est du texte brut en syntaxe Markdown
 (`- ` et `1. `, retrait de 2 espaces) : il se colle tel quel dans un prompt Claude. **Copier** retire en plus

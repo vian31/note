@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="referrer" content="no-referrer">
 <title>Note</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -16,7 +16,7 @@
   @media (prefers-color-scheme: dark) {
     :root { --fond: #111; --texte: #eee; --bord: #333; --bouton: #1c1c1c; --appui: #2a2a2a; --voile: rgba(0,0,0,.6); }
   }
-  html, body { margin: 0; height: 100%; background: var(--fond); color: var(--texte); }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--fond); color: var(--texte); }
   body { display: flex; flex-direction: column; font: 18px/1.5 system-ui, sans-serif; }
   #onglets {
     display: flex; padding: max(8px, env(safe-area-inset-top)) 16px 0;
@@ -109,6 +109,18 @@
 <script src="config.js"></script>
 <script>
 (async () => {
+  // Quand le clavier du téléphone s'ouvre, la page se limite à la zone visible :
+  // les boutons du bas restent au-dessus du clavier (iOS ne redimensionne pas la page seul)
+  if (window.visualViewport) {
+    const suivre = () => {
+      document.body.style.height = visualViewport.height + 'px';
+      document.body.style.transform = visualViewport.offsetTop ? `translateY(${visualViewport.offsetTop}px)` : '';
+    };
+    visualViewport.addEventListener('resize', suivre);
+    visualViewport.addEventListener('scroll', suivre);
+    suivre();
+  }
+
   const note = document.getElementById('note');
   const etat = document.getElementById('etat');
   const boutonsOnglets = [...document.querySelectorAll('#onglets button')];
@@ -524,10 +536,11 @@
   // remplacent souvent « - » par un tiret long)
   const LISTE = /^([ \t]*)(?:([-*+•–—▪◦‣·])|(\d+|[a-zA-Z](?=\)))([.)]))[ \t]+/;
   const ITEM_VIDE = /^[ \t]*(?:[-*+•–—▪◦‣·]|\d+[.)]|[a-zA-Z]\))[ \t]*$/;
-  const suivant = n => /\d/.test(n) ? String(+n + 1) : n === 'z' || n === 'Z' ? n : String.fromCharCode(n.charCodeAt(0) + 1);
-  const marqueSuivante = m => m[2] ? m[2] + ' ' : `${suivant(m[3])}${m[4]} `;
   const RETRAIT = '  ';
   const MOINS_UN_RETRAIT = /^( {1,2}|\t)/;
+  // Style par niveau de retrait : un retrait ouvre un sous-niveau d'un autre type (chapitres)
+  const STYLES_PUCES = ['-', '•', '◦'];
+  const STYLES_NUMEROS = [['d', '.'], ['l', ')'], ['d', ')']]; // 1.  a)  1)
   let interne = false;
 
   // Remplace [debut, fin) en gardant l'historique d'annulation (Ctrl+Z) du navigateur
@@ -545,96 +558,188 @@
     interne = false;
   }
 
-  // Lignes entières touchées par la sélection
-  function bloc() {
-    const v = note.value, debut = note.selectionStart;
-    const a = debut === 0 ? 0 : v.lastIndexOf('\n', debut - 1) + 1;
-    let fin = note.selectionEnd;
-    if (fin > debut && v[fin - 1] === '\n') fin--; // une sélection qui finit en début de ligne ne prend pas cette ligne
-    let b = v.indexOf('\n', fin);
-    if (b < 0) b = v.length;
-    return { a, b, lignes: v.slice(a, b).split('\n') };
+  // Position d'un curseur (décalage dans le texte) ↔ (ligne, colonne)
+  function pointer(lignes, decalage) {
+    let p = 0;
+    for (let i = 0; i < lignes.length; i++) {
+      if (decalage <= p + lignes[i].length) return [i, decalage - p];
+      p += lignes[i].length + 1;
+    }
+    return [lignes.length - 1, lignes[lignes.length - 1].length];
+  }
+  const decalageDe = (lignes, i, col) => lignes.slice(0, i).reduce((t, l) => t + l.length + 1, 0) + col;
+
+  // Décompose une ligne de liste (null si ce n'en est pas une)
+  function analyser(ligne) {
+    const m = LISTE.exec(ligne);
+    if (!m) return null;
+    const it = {
+      retrait: m[1],
+      prof: Math.floor(m[1].replace(/\t/g, RETRAIT).length / 2),
+      marque: m[0].slice(m[1].length).trim(),
+      corps: ligne.slice(m[0].length),
+    };
+    if (m[2]) it.puce = m[2];
+    else {
+      it.delim = m[4];
+      if (/\d/.test(m[3])) { it.type = 'd'; it.n = +m[3]; }
+      else { it.type = m[3] === m[3].toLowerCase() ? 'l' : 'L'; it.n = m[3].toLowerCase().charCodeAt(0) - 96; }
+    }
+    return it;
+  }
+  const valeur = it => it.type === 'd' || it.n > 26 ? String(it.n) : String.fromCharCode((it.type === 'L' ? 64 : 96) + it.n);
+  const marqueDe = it => it.puce || valeur(it) + it.delim;
+
+  // Recalcule les marqueurs des lignes lignes[debut..fin] (créées ou décalées) puis renumérote
+  // les éléments qui les suivent dans la même liste. Un élément prend le style de son niveau :
+  // celui du précédent au même niveau s'il y en a un (« 4. » redevient « 2. » après « a) b) »),
+  // sinon le style par défaut du niveau (1. → a) → 1)).
+  function normaliser(lignes, debut, fin) {
+    const estListe = l => LISTE.test(l);
+    let i = 0;
+    while (i < lignes.length) {
+      if (!estListe(lignes[i])) { i++; continue; }
+      // une liste = éléments consécutifs, lignes vides tolérées entre eux
+      let dernier = i;
+      for (let j = i + 1; j < lignes.length && (estListe(lignes[j]) || !lignes[j].trim()); j++)
+        if (estListe(lignes[j])) dernier = j;
+      if (dernier >= debut && i <= fin) normaliserListe(lignes, i, dernier, debut, fin);
+      i = dernier + 1;
+    }
   }
 
-  function remplacerBloc(a, b, lignes) {
-    const pos = note.selectionStart, collee = pos === note.selectionEnd;
-    const texte = lignes.join('\n');
-    if (texte === note.value.slice(a, b)) return;
-    remplacer(a, b, texte);
-    if (collee) {
-      const p = Math.min(Math.max(pos + texte.length - (b - a), a), a + texte.length);
-      note.setSelectionRange(p, p);
-    } else {
-      note.setSelectionRange(a, a + texte.length);
+  function normaliserListe(lignes, a, b, debut, fin) {
+    const pile = []; // dernier élément vu à chaque niveau
+    for (let i = a; i <= b; i++) {
+      const it = analyser(lignes[i]);
+      if (!it) continue;
+      pile.length = Math.min(pile.length, it.prof + 1);
+      const prec = pile[it.prof];
+      const memeNature = prec && !!prec.puce === !!it.puce;
+      if (i >= debut && i <= fin) {
+        if (memeNature && it.puce) it.puce = prec.puce;
+        else if (memeNature) Object.assign(it, { type: prec.type, delim: prec.delim, n: prec.n + 1 });
+        else if (it.puce) it.puce = STYLES_PUCES[it.prof % STYLES_PUCES.length];
+        else {
+          const [type, delim] = STYLES_NUMEROS[it.prof % STYLES_NUMEROS.length];
+          Object.assign(it, { type, delim, n: 1 });
+        }
+      } else if (i > fin && memeNature && !it.puce) {
+        it.n = prec.n + 1;
+      }
+      if (marqueDe(it) !== it.marque) lignes[i] = it.retrait + marqueDe(it) + ' ' + it.corps;
+      pile[it.prof] = it;
     }
+  }
+
+  // Remplace le texte (une seule modification, annulable d'un Ctrl+Z) et place la sélection
+  function appliquer(lignes, debut, fin) {
+    const nouveau = lignes.join('\n');
+    if (nouveau !== note.value) {
+      const z = zoneModifiee(note.value, nouveau);
+      remplacer(z.debut, z.fin, z.remplacement);
+    }
+    note.setSelectionRange(debut, fin);
+  }
+
+  // Applique une modification aux lignes touchées par la sélection, puis recalcule les marqueurs
+  function transformer(modifier) {
+    const avant = note.value.split('\n'), apres = avant.slice();
+    const [i0] = pointer(avant, note.selectionStart);
+    let [i1, col1] = pointer(avant, note.selectionEnd);
+    if (note.selectionEnd > note.selectionStart && col1 === 0 && i1 > i0) i1--; // sélection finissant en début de ligne
+    modifier(apres, i0, i1);
+    if (apres.every((l, i) => l === avant[i])) return;
+    normaliser(apres, i0, i1);
+    let debut, fin;
+    if (note.selectionStart === note.selectionEnd) {
+      // curseur : même distance à la fin de sa ligne
+      const [i, col] = pointer(avant, note.selectionStart);
+      debut = fin = decalageDe(apres, i, Math.max(0, apres[i].length - (avant[i].length - col)));
+    } else {
+      debut = decalageDe(apres, i0, 0);
+      fin = decalageDe(apres, i1, apres[i1].length);
+    }
+    appliquer(apres, debut, fin);
   }
 
   // Met les lignes en liste ; si elles y sont déjà, les en retire
   function mettreListe(type) {
-    const { a, b, lignes } = bloc();
-    const seule = lignes.length === 1;
-    const utiles = lignes.filter(l => seule || l.trim());
-    const retirer = utiles.every(l => { const m = LISTE.exec(l); return m && (type === 'puce' ? m[2] : m[3]); });
-    const compteurs = {};
-    remplacerBloc(a, b, lignes.map(l => {
-      if (!seule && !l.trim()) return l;
-      const m = LISTE.exec(l);
-      const retrait = m ? m[1] : /^[ \t]*/.exec(l)[0];
-      const corps = l.slice(m ? m[0].length : retrait.length);
-      if (retirer) return retrait + corps;
-      if (type === 'puce') return retrait + '- ' + corps;
-      for (const k in compteurs) if (+k > retrait.length) delete compteurs[k];
-      compteurs[retrait.length] = (compteurs[retrait.length] || 0) + 1;
-      return `${retrait}${compteurs[retrait.length]}. ${corps}`;
-    }));
+    transformer((l, i0, i1) => {
+      const concernees = [];
+      for (let i = i0; i <= i1; i++) if (i0 === i1 || l[i].trim()) concernees.push(i);
+      const retirer = concernees.every(i => { const it = analyser(l[i]); return it && (type === 'puce' ? it.puce : !it.puce); });
+      concernees.forEach(i => {
+        const it = analyser(l[i]);
+        const retrait = it ? it.retrait : /^[ \t]*/.exec(l[i])[0];
+        const corps = it ? it.corps : l[i].slice(retrait.length);
+        l[i] = retirer ? retrait + corps : retrait + (type === 'puce' ? '- ' : '1. ') + corps;
+      });
+    });
   }
 
   function decaler(sens) {
-    const { a, b, lignes } = bloc();
-    const seule = lignes.length === 1;
-    remplacerBloc(a, b, lignes.map(l =>
-      sens > 0 ? (seule || l.trim() ? RETRAIT + l : l) : l.replace(MOINS_UN_RETRAIT, '')));
+    transformer((l, i0, i1) => {
+      for (let i = i0; i <= i1; i++)
+        l[i] = sens > 0 ? (i0 === i1 || l[i].trim() ? RETRAIT + l[i] : l[i]) : l[i].replace(MOINS_UN_RETRAIT, '');
+    });
   }
 
-  // Entrée dans une liste : continue la liste (numéro suivant) ; sur un élément vide, en sort
-  note.addEventListener('beforeinput', e => {
-    if (interne || !e.cancelable || (e.inputType !== 'insertLineBreak' && e.inputType !== 'insertParagraph')) return;
-    const v = note.value, pos = note.selectionStart;
-    if (pos !== note.selectionEnd) return;
-    const a = pos === 0 ? 0 : v.lastIndexOf('\n', pos - 1) + 1;
-    let b = v.indexOf('\n', pos);
-    if (b < 0) b = v.length;
-    const ligne = v.slice(a, b), m = LISTE.exec(ligne);
-    if (!m || pos < a + m[0].length) return;
-    e.preventDefault();
-    if (!ligne.slice(m[0].length).trim()) {
+  // Entrée : lignes[k-1] est l'élément qui vient d'être terminé, lignes[k] le reste du texte.
+  // Renvoie la position du curseur [ligne, colonne], ou null si ce n'est pas une liste.
+  function continuer(lignes, k) {
+    const it = analyser(lignes[k - 1]);
+    if (!it) return null;
+    if (!it.corps.trim() && !lignes[k].trim()) {
       // élément vide : remonter d'un niveau s'il est en retrait, sinon quitter la liste
-      remplacer(a, b, m[1] ? ligne.replace(MOINS_UN_RETRAIT, '') : '');
-      return;
+      lignes.splice(k, 1);
+      k--;
+      lignes[k] = it.retrait ? lignes[k].replace(MOINS_UN_RETRAIT, '') : '';
+      if (it.retrait) normaliser(lignes, k, k);
+      return [k, lignes[k].length];
     }
-    remplacer(pos, pos, '\n' + m[1] + marqueSuivante(m));
+    lignes[k] = it.retrait + (it.puce || '1.') + ' ' + lignes[k];
+    normaliser(lignes, k, k); // marqueur suivant ; les éléments d'après sont renumérotés
+    return [k, LISTE.exec(lignes[k])[0].length];
+  }
+
+  const SAUT_DE_LIGNE = /^(insertLineBreak|insertParagraph)$/;
+
+  // Entrée dans une liste : continue la liste ; sur un élément vide, en sort
+  note.addEventListener('beforeinput', e => {
+    if (interne || !e.cancelable || !SAUT_DE_LIGNE.test(e.inputType)) return;
+    const pos = note.selectionStart;
+    if (pos !== note.selectionEnd) return;
+    const lignes = note.value.split('\n');
+    const [i, col] = pointer(lignes, pos);
+    const m = LISTE.exec(lignes[i]);
+    if (!m || col < m[0].length) return;
+    e.preventDefault();
+    lignes.splice(i, 1, lignes[i].slice(0, col), lignes[i].slice(col));
+    const [ligne, colonne] = continuer(lignes, i + 1);
+    const curseur = decalageDe(lignes, ligne, colonne);
+    appliquer(lignes, curseur, curseur);
   });
 
   // Secours pour les claviers (certains téléphones) qui ne laissent pas intercepter Entrée :
   // la ligne vient d'être coupée, on complète après coup
   note.addEventListener('input', e => {
-    if (interne || (e.inputType !== 'insertLineBreak' && e.inputType !== 'insertParagraph')) return;
-    const v = note.value, pos = note.selectionStart;
-    if (pos !== note.selectionEnd || v[pos - 1] !== '\n') return;
-    const a = pos < 2 ? 0 : v.lastIndexOf('\n', pos - 2) + 1;
-    const ligne = v.slice(a, pos - 1), m = LISTE.exec(ligne);
-    if (!m) return;
-    if (!ligne.slice(m[0].length).trim()) {
-      remplacer(a, pos, m[1] ? ligne.replace(MOINS_UN_RETRAIT, '') : '');
-      return;
-    }
-    remplacer(pos, pos, m[1] + marqueSuivante(m));
+    if (interne || !SAUT_DE_LIGNE.test(e.inputType) || note.selectionStart !== note.selectionEnd) return;
+    const lignes = note.value.split('\n');
+    const [k, col] = pointer(lignes, note.selectionStart);
+    if (k === 0 || col !== 0) return;
+    const c = continuer(lignes, k);
+    if (!c) return;
+    const curseur = decalageDe(lignes, c[0], c[1]);
+    appliquer(lignes, curseur, curseur);
   });
 
   // Tab / Maj+Tab décalent les éléments de liste (ailleurs, Tab garde son rôle normal)
   note.addEventListener('keydown', e => {
     if (e.key !== 'Tab' || e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return;
-    if (!bloc().lignes.some(l => LISTE.test(l))) return;
+    const lignes = note.value.split('\n');
+    const [i0] = pointer(lignes, note.selectionStart), [i1] = pointer(lignes, note.selectionEnd);
+    if (!lignes.slice(i0, i1 + 1).some(l => LISTE.test(l))) return;
     e.preventDefault();
     decaler(e.shiftKey ? -1 : 1);
   });
