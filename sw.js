@@ -1,4 +1,4 @@
-const CACHE = 'note-v11';
+const CACHE = 'note-v12';
 const FICHIERS = ['./', 'index.html', 'config.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

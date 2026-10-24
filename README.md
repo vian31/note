@@ -18,6 +18,13 @@ sans SDK.
 
 L'appli est alors sur <https://vian31.github.io/note/> ; « Ajouter à l'écran d'accueil » pour l'installer.
 
+## Puces et numérotation
+
+Boutons **• Puces**, **1. Liste**, **⇥ ⇤** (décaler). Au clavier : Entrée continue la liste (numéro suivant),
+Entrée sur un élément vide en sort, Tab / Maj+Tab décalent. C'est du texte brut en syntaxe Markdown
+(`- ` et `1. `, retrait de 2 espaces) : il se colle tel quel dans un prompt Claude. **Copier** retire en plus
+les éléments de liste vides et les espaces en fin de ligne.
+
 ## Synchronisation
 
 - Flux en direct Firebase pour l'onglet affiché, plus une lecture toutes les 2 s

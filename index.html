@@ -32,9 +32,14 @@
     flex: 1; width: 100%; border: 0; outline: 0; resize: none; padding: 16px;
     font: inherit; background: transparent; color: inherit;
   }
+  #format {
+    display: flex; gap: 6px; padding: 8px 16px 0; border-top: 1px solid var(--bord);
+  }
+  #format button { flex: 1; padding: 6px 4px; white-space: nowrap; }
+  #format #indenter, #format #desindenter { flex: 0 0 52px; }
   nav {
     display: flex; gap: 6px; padding: 8px 16px max(8px, env(safe-area-inset-bottom));
-    border-top: 1px solid var(--bord); align-items: center;
+    align-items: center;
   }
   button {
     font: inherit; padding: 8px 10px; border: 1px solid var(--bord); border-radius: 8px;
@@ -80,6 +85,12 @@
   <button role="tab">3</button>
 </div>
 <textarea id="note" spellcheck="false" autofocus></textarea>
+<div id="format">
+  <button id="puces" aria-label="Liste à puces">• Puces</button>
+  <button id="numeros" aria-label="Liste numérotée">1. Liste</button>
+  <button id="indenter" aria-label="Décaler vers la droite">⇥</button>
+  <button id="desindenter" aria-label="Décaler vers la gauche">⇤</button>
+</div>
 <nav>
   <button id="effacer">Effacer</button>
   <button id="copier">Copier</button>
@@ -506,6 +517,119 @@
     planifier(actif);
   });
 
+  // ---- Puces et numérotation ----
+  // Texte brut en syntaxe Markdown (« - » et « 1. », retrait de 2 espaces) : Claude la comprend
+  // et le texte se colle tel quel dans un prompt.
+  const LISTE = /^([ \t]*)(?:([-*•])|(\d+)([.)]))[ \t]+/;
+  const ITEM_VIDE = /^[ \t]*(?:[-*•]|\d+[.)])[ \t]*$/;
+  const RETRAIT = '  ';
+  const MOINS_UN_RETRAIT = /^( {1,2}|\t)/;
+  let interne = false;
+
+  // Remplace [debut, fin) en gardant l'historique d'annulation (Ctrl+Z) du navigateur
+  function remplacer(debut, fin, texte) {
+    interne = true;
+    note.focus();
+    note.setSelectionRange(debut, fin);
+    let ok = true;
+    if (texte) ok = document.execCommand('insertText', false, texte);
+    else if (debut < fin) ok = document.execCommand('delete');
+    if (!ok) {
+      note.setRangeText(texte, debut, fin, 'end');
+      note.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    interne = false;
+  }
+
+  // Lignes entières touchées par la sélection
+  function bloc() {
+    const v = note.value, debut = note.selectionStart;
+    const a = debut === 0 ? 0 : v.lastIndexOf('\n', debut - 1) + 1;
+    let fin = note.selectionEnd;
+    if (fin > debut && v[fin - 1] === '\n') fin--; // une sélection qui finit en début de ligne ne prend pas cette ligne
+    let b = v.indexOf('\n', fin);
+    if (b < 0) b = v.length;
+    return { a, b, lignes: v.slice(a, b).split('\n') };
+  }
+
+  function remplacerBloc(a, b, lignes) {
+    const pos = note.selectionStart, collee = pos === note.selectionEnd;
+    const texte = lignes.join('\n');
+    if (texte === note.value.slice(a, b)) return;
+    remplacer(a, b, texte);
+    if (collee) {
+      const p = Math.min(Math.max(pos + texte.length - (b - a), a), a + texte.length);
+      note.setSelectionRange(p, p);
+    } else {
+      note.setSelectionRange(a, a + texte.length);
+    }
+  }
+
+  // Met les lignes en liste ; si elles y sont déjà, les en retire
+  function mettreListe(type) {
+    const { a, b, lignes } = bloc();
+    const seule = lignes.length === 1;
+    const utiles = lignes.filter(l => seule || l.trim());
+    const retirer = utiles.every(l => { const m = LISTE.exec(l); return m && (type === 'puce' ? m[2] : m[3]); });
+    const compteurs = {};
+    remplacerBloc(a, b, lignes.map(l => {
+      if (!seule && !l.trim()) return l;
+      const m = LISTE.exec(l);
+      const retrait = m ? m[1] : /^[ \t]*/.exec(l)[0];
+      const corps = l.slice(m ? m[0].length : retrait.length);
+      if (retirer) return retrait + corps;
+      if (type === 'puce') return retrait + '- ' + corps;
+      for (const k in compteurs) if (+k > retrait.length) delete compteurs[k];
+      compteurs[retrait.length] = (compteurs[retrait.length] || 0) + 1;
+      return `${retrait}${compteurs[retrait.length]}. ${corps}`;
+    }));
+  }
+
+  function decaler(sens) {
+    const { a, b, lignes } = bloc();
+    const seule = lignes.length === 1;
+    remplacerBloc(a, b, lignes.map(l =>
+      sens > 0 ? (seule || l.trim() ? RETRAIT + l : l) : l.replace(MOINS_UN_RETRAIT, '')));
+  }
+
+  // Entrée dans une liste : continue la liste (numéro suivant) ; sur un élément vide, en sort
+  note.addEventListener('beforeinput', e => {
+    if (interne || !e.cancelable || (e.inputType !== 'insertLineBreak' && e.inputType !== 'insertParagraph')) return;
+    const v = note.value, pos = note.selectionStart;
+    if (pos !== note.selectionEnd) return;
+    const a = pos === 0 ? 0 : v.lastIndexOf('\n', pos - 1) + 1;
+    let b = v.indexOf('\n', pos);
+    if (b < 0) b = v.length;
+    const ligne = v.slice(a, b), m = LISTE.exec(ligne);
+    if (!m || pos < a + m[0].length) return;
+    e.preventDefault();
+    if (!ligne.slice(m[0].length).trim()) {
+      // élément vide : remonter d'un niveau s'il est en retrait, sinon quitter la liste
+      remplacer(a, b, m[1] ? ligne.replace(MOINS_UN_RETRAIT, '') : '');
+      return;
+    }
+    remplacer(pos, pos, '\n' + m[1] + (m[2] ? m[2] + ' ' : `${+m[3] + 1}${m[4]} `));
+  });
+
+  // Tab / Maj+Tab décalent les éléments de liste (ailleurs, Tab garde son rôle normal)
+  note.addEventListener('keydown', e => {
+    if (e.key !== 'Tab' || e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return;
+    if (!bloc().lignes.some(l => LISTE.test(l))) return;
+    e.preventDefault();
+    decaler(e.shiftKey ? -1 : 1);
+  });
+
+  // Les boutons ne doivent pas retirer le focus au texte (le clavier du téléphone reste ouvert)
+  document.querySelectorAll('#format button').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
+  document.getElementById('puces').onclick = () => mettreListe('puce');
+  document.getElementById('numeros').onclick = () => mettreListe('numero');
+  document.getElementById('indenter').onclick = () => decaler(1);
+  document.getElementById('desindenter').onclick = () => decaler(-1);
+
+  // Texte copié : sans éléments de liste vides ni espaces en fin de ligne
+  const propre = texte => texte.split('\n').filter(l => !ITEM_VIDE.test(l))
+    .map(l => l.replace(/[ \t]+$/, '')).join('\n').trim();
+
   async function copier(texte) {
     try {
       await navigator.clipboard.writeText(texte);
@@ -533,8 +657,9 @@
   };
 
   document.getElementById('copier').onclick = async () => {
-    await copier(note.value);
-    annoncer(note.value ? 'Copié ✓' : 'Note vide');
+    const texte = propre(note.value);
+    await copier(texte);
+    annoncer(texte ? 'Copié ✓' : 'Note vide');
   };
 
   // Synchro manuelle : envoyer ce qui est en attente, puis récupérer la version du serveur
