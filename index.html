@@ -520,8 +520,12 @@
   // ---- Puces et numérotation ----
   // Texte brut en syntaxe Markdown (« - » et « 1. », retrait de 2 espaces) : Claude la comprend
   // et le texte se colle tel quel dans un prompt.
-  const LISTE = /^([ \t]*)(?:([-*•])|(\d+)([.)]))[ \t]+/;
-  const ITEM_VIDE = /^[ \t]*(?:[-*•]|\d+[.)])[ \t]*$/;
+  // Reconnus : puces - * + • – — ▪ ◦ ‣ · ; numéros 1. 1) ; lettres a) (les claviers de téléphone
+  // remplacent souvent « - » par un tiret long)
+  const LISTE = /^([ \t]*)(?:([-*+•–—▪◦‣·])|(\d+|[a-zA-Z](?=\)))([.)]))[ \t]+/;
+  const ITEM_VIDE = /^[ \t]*(?:[-*+•–—▪◦‣·]|\d+[.)]|[a-zA-Z]\))[ \t]*$/;
+  const suivant = n => /\d/.test(n) ? String(+n + 1) : n === 'z' || n === 'Z' ? n : String.fromCharCode(n.charCodeAt(0) + 1);
+  const marqueSuivante = m => m[2] ? m[2] + ' ' : `${suivant(m[3])}${m[4]} `;
   const RETRAIT = '  ';
   const MOINS_UN_RETRAIT = /^( {1,2}|\t)/;
   let interne = false;
@@ -608,7 +612,23 @@
       remplacer(a, b, m[1] ? ligne.replace(MOINS_UN_RETRAIT, '') : '');
       return;
     }
-    remplacer(pos, pos, '\n' + m[1] + (m[2] ? m[2] + ' ' : `${+m[3] + 1}${m[4]} `));
+    remplacer(pos, pos, '\n' + m[1] + marqueSuivante(m));
+  });
+
+  // Secours pour les claviers (certains téléphones) qui ne laissent pas intercepter Entrée :
+  // la ligne vient d'être coupée, on complète après coup
+  note.addEventListener('input', e => {
+    if (interne || (e.inputType !== 'insertLineBreak' && e.inputType !== 'insertParagraph')) return;
+    const v = note.value, pos = note.selectionStart;
+    if (pos !== note.selectionEnd || v[pos - 1] !== '\n') return;
+    const a = pos < 2 ? 0 : v.lastIndexOf('\n', pos - 2) + 1;
+    const ligne = v.slice(a, pos - 1), m = LISTE.exec(ligne);
+    if (!m) return;
+    if (!ligne.slice(m[0].length).trim()) {
+      remplacer(a, pos, m[1] ? ligne.replace(MOINS_UN_RETRAIT, '') : '');
+      return;
+    }
+    remplacer(pos, pos, m[1] + marqueSuivante(m));
   });
 
   // Tab / Maj+Tab décalent les éléments de liste (ailleurs, Tab garde son rôle normal)

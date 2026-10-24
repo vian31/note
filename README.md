@@ -20,6 +20,10 @@ L'appli est alors sur <https://vian31.github.io/note/> ; « Ajouter à l'écran 
 
 ## Puces et numérotation
 
+Détection automatique : une ligne qui commence par `- `, `* `, `+ `, `• `, `– `, `1. `, `1) ` ou `a) `
+est reconnue comme élément de liste, et Entrée ouvre l'élément suivant (même repli sur les claviers de
+téléphone qui n'autorisent pas l'interception de la touche Entrée).
+
 Boutons **• Puces**, **1. Liste**, **⇥ ⇤** (décaler). Au clavier : Entrée continue la liste (numéro suivant),
 Entrée sur un élément vide en sort, Tab / Maj+Tab décalent. C'est du texte brut en syntaxe Markdown
 (`- ` et `1. `, retrait de 2 espaces) : il se colle tel quel dans un prompt Claude. **Copier** retire en plus
