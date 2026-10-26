@@ -712,33 +712,48 @@
 
   const SAUT_DE_LIGNE = /^(insertLineBreak|insertParagraph)$/;
 
-  // Entrée dans une liste : continue la liste ; sur un élément vide, en sort
-  note.addEventListener('beforeinput', e => {
-    if (interne || !e.cancelable || !SAUT_DE_LIGNE.test(e.inputType)) return;
-    const pos = note.selectionStart;
-    if (pos !== note.selectionEnd) return;
-    const lignes = note.value.split('\n');
-    const [i, col] = pointer(lignes, pos);
-    const m = LISTE.exec(lignes[i]);
-    if (!m || col < m[0].length) return;
-    e.preventDefault();
-    lignes.splice(i, 1, lignes[i].slice(0, col), lignes[i].slice(col));
-    const [ligne, colonne] = continuer(lignes, i + 1);
-    const curseur = decalageDe(lignes, ligne, colonne);
-    appliquer(lignes, curseur, curseur);
-  });
+  // Collage de texte, ou clavier qui envoie le texte ligne par ligne : on n'interprète rien,
+  // sinon des lignes de code ressemblant à des listes (« * », « - », « 1. ») seraient modifiées.
+  // Sont considérés comme un collage : un collage ou glisser-déposer, un bloc de texte d'un coup,
+  // ou un saut de ligne arrivant moins de 15 ms après le texte précédent (impossible à la main).
+  // La protection dure 0,6 s et se prolonge tant que le texte arrive en rafale (écarts < 100 ms).
+  const COLLAGE = /^(insertFromPaste|insertFromDrop|insertFromYank|insertReplacementText)$/;
+  let dernierTexte = 0, collageJusqua = 0;
+  const maintenant = () => performance.now();
+  function collageEnCours(e) {
+    const t = maintenant(), ecart = t - dernierTexte;
+    if (COLLAGE.test(e.inputType) || (e.data && (e.data.length > 50 || e.data.includes('\n')))) collageJusqua = t + 600;
+    else if (SAUT_DE_LIGNE.test(e.inputType) && ecart < 15) collageJusqua = t + 600;
+    else if (t < collageJusqua && ecart < 100) collageJusqua = t + 600;
+    if (!e.isComposing && e.inputType !== 'insertCompositionText') dernierTexte = t;
+    return t < collageJusqua;
+  }
+  note.addEventListener('paste', () => { collageJusqua = maintenant() + 600; });
 
-  // Secours pour les claviers (certains téléphones) qui ne laissent pas intercepter Entrée :
-  // la ligne vient d'être coupée, on complète après coup
+  // Entrée dans une liste : le navigateur insère le saut de ligne normalement ; 0,15 s plus tard,
+  // si rien d'autre n'a été saisi entre-temps, la liste est continuée (ou quittée sur un élément vide).
+  // Si du texte arrive aussitôt (collage, clavier qui envoie le texte ligne par ligne), on n'y touche pas.
+  let jeton = 0;
+  note.addEventListener('beforeinput', e => {
+    if (interne) return;
+    collageEnCours(e);
+    jeton++; // tout nouveau texte annule une continuation en attente
+  });
   note.addEventListener('input', e => {
-    if (interne || !SAUT_DE_LIGNE.test(e.inputType) || note.selectionStart !== note.selectionEnd) return;
-    const lignes = note.value.split('\n');
-    const [k, col] = pointer(lignes, note.selectionStart);
-    if (k === 0 || col !== 0) return;
-    const c = continuer(lignes, k);
-    if (!c) return;
-    const curseur = decalageDe(lignes, c[0], c[1]);
-    appliquer(lignes, curseur, curseur);
+    if (interne || !SAUT_DE_LIGNE.test(e.inputType) || maintenant() < collageJusqua) return;
+    if (note.selectionStart !== note.selectionEnd) return;
+    const mon = jeton, valeur = note.value, pos = note.selectionStart;
+    setTimeout(() => {
+      if (jeton !== mon || note.value !== valeur || note.selectionStart !== pos || note.selectionEnd !== pos) return;
+      if (navigator.scheduling?.isInputPending?.()) return; // du texte est déjà en route
+      const lignes = valeur.split('\n');
+      const [k, col] = pointer(lignes, pos);
+      if (k === 0 || col !== 0) return; // le curseur est au début de la nouvelle ligne
+      const c = continuer(lignes, k);
+      if (!c) return;
+      const curseur = decalageDe(lignes, c[0], c[1]);
+      appliquer(lignes, curseur, curseur);
+    }, 150);
   });
 
   // Tab / Maj+Tab décalent les éléments de liste (ailleurs, Tab garde son rôle normal)

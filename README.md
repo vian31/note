@@ -28,6 +28,10 @@ Un retrait ouvre un sous-niveau d'un autre type (chapitres) : `1.` → `a)` → 
 `-` → `•` → `◦` pour les puces. En remontant d'un niveau, la numérotation reprend à la suite
 (`1.`, `a)`, `b)`, puis `2.`). Insérer ou décaler un élément renumérote les suivants.
 
+Le texte collé n'est jamais interprété : un collage, ou un clavier qui envoie le texte ligne par ligne,
+laisse le code intact (les lignes `* `, `- `, `1.` d'un commentaire ou d'un YAML ne sont pas transformées).
+La liste n'est continuée que 0,15 s après un Entrée tapé à la main, si rien d'autre n'a été saisi entre-temps.
+
 Boutons **• Puces**, **1. Liste**, **⇥ ⇤** (décaler). Au clavier : Entrée continue la liste (numéro suivant),
 Entrée sur un élément vide en sort, Tab / Maj+Tab décalent. C'est du texte brut en syntaxe Markdown
 (`- ` et `1. `, retrait de 2 espaces) : il se colle tel quel dans un prompt Claude. **Copier** retire en plus
