@@ -37,6 +37,9 @@ les éléments de liste vides et les espaces en fin de ligne.
 
 - Flux en direct Firebase pour l'onglet affiché, plus une lecture toutes les 2 s
   (certains proxys d'entreprise retiennent le flux).
+- Les événements du flux ne servent que de signal : le contenu est toujours relu auprès du serveur
+  (un écho en retard ne peut plus être pris pour une modification d'un autre appareil).
+  Les relectures utilisent `If-None-Match` : réponse « 304 inchangé » sans retélécharger le texte.
 - Envois conditionnels (ETag) : un appareil ne peut pas écraser une version qu'il n'a pas vue.
   En cas d'écritures simultanées, les modifications sont fusionnées si elles touchent des
   endroits différents ; sinon la version locale l'emporte.

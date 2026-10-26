@@ -314,10 +314,13 @@
     const envois = o.envois;
     let r, data;
     try {
-      r = await fetch(`${o.url}?t=${Date.now()}`, { cache: 'no-store', headers: entetesLecture });
+      // Avec la version connue, Firebase répond « 304 inchangé » sans renvoyer le texte
+      const entetes = o.etag ? { ...entetesLecture, 'if-none-match': o.etag } : entetesLecture;
+      r = await fetch(`${o.url}?t=${Date.now()}`, { cache: 'no-store', headers: entetes });
+      lectureEnEchec = false;
+      if (r.status === 304) return;
       if (!r.ok) throw new Error(r.status);
       data = await r.json();
-      lectureEnEchec = false;
     } catch (e) {
       lectureEnEchec = true;
       throw e;
@@ -390,11 +393,12 @@
   function envoyerAvantFermeture() {
     onglets.forEach(o => {
       if (!aEnvoyer(o) || o.occupe || !o.etag) return; // seulement en envoi conditionnel
-      const texte = o.texte;
+      const texte = o.texte, corps = JSON.stringify(texte);
+      if (corps.length > 30000) return; // fetch keepalive est limité à 64 Ko : le texte partira à la réouverture
       o.peutEtre = texte;
       stock.ecrire(o.cache + ':envoye', texte);
       o.occupe = true;
-      fetch(o.url, { method: 'PUT', keepalive: true, headers: entetesEnvoi(o), body: JSON.stringify(texte) })
+      fetch(o.url, { method: 'PUT', keepalive: true, headers: entetesEnvoi(o), body: corps })
         .then(r => {
           if (r.ok) { o.etag = r.headers.get('ETag'); o.envois++; definir(o, { depart: texte }); }
           if (r.status === 412 || r.ok) oublierPeutEtre(o);
@@ -435,7 +439,10 @@
       clearTimeout(minuteurSecours);
       dernierSignal = Date.now();
       const { path, data } = JSON.parse(e.data);
-      if (path === '/') recevoir(o, data, null);
+      // Les événements du flux peuvent arriver en retard ou dans le désordre (proxy, réseau mobile) :
+      // leur contenu pourrait être une ancienne version de nos propres envois. Ils servent donc
+      // de signal : on relit la version actuelle du serveur.
+      if (path === '/' && (typeof data === 'string' ? data : '') !== o.depart) lire(o).catch(() => {});
     });
     flux.addEventListener('keep-alive', () => { dernierSignal = Date.now(); });
     flux.addEventListener('cancel', () => { lectureEnEchec = true; majEtat(); }); // accès refusé par les règles
