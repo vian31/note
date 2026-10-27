@@ -1,0 +1,1417 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="referrer" content="no-referrer">
+<title>Note (test)</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<style>
+  * { box-sizing: border-box; }
+  :root {
+    --fond: #fff; --texte: #111; --bord: #e5e5e5; --bouton: #fff; --appui: #f2f2f2; --voile: rgba(0,0,0,.35);
+    --code: #f3f5f8; --code-cloture: #e7ebf1; --code-bord: #8a9bb5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fond: #111; --texte: #eee; --bord: #333; --bouton: #1c1c1c; --appui: #2a2a2a; --voile: rgba(0,0,0,.6);
+      --code: #1b2029; --code-cloture: #232a35; --code-bord: #5d7091;
+    }
+  }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--fond); color: var(--texte); }
+  body { display: flex; flex-direction: column; font: 18px/1.5 system-ui, sans-serif; }
+  #onglets {
+    display: flex; align-items: center; gap: 4px; padding: max(8px, env(safe-area-inset-top)) 12px 0 16px;
+    border-bottom: 1px solid var(--bord);
+  }
+  #onglets button {
+    flex: 1; min-width: 0; border: 0; border-radius: 0; background: none; padding: 8px 4px;
+    border-bottom: 2px solid transparent; opacity: .5;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  #onglets button[aria-selected="true"] { border-bottom-color: currentColor; opacity: 1; font-weight: 600; }
+  #onglets #lien { flex: none; border: 0; padding: 4px 6px; opacity: .8; font-size: 16px; }
+  /* Zone de saisie : le « miroir » derrière la zone de texte dessine le fond des blocs de code */
+  #zone { position: relative; flex: 1; min-height: 0; }
+  #zone textarea, #miroir {
+    position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 16px; border: 0;
+    font: inherit; line-height: inherit; letter-spacing: normal; tab-size: 8; font-variant-ligatures: none;
+    white-space: pre-wrap; overflow-wrap: break-word; word-break: normal;
+    overflow-x: hidden; overflow-y: scroll;
+  }
+  #zone textarea { outline: 0; resize: none; background: transparent; color: inherit; }
+  #miroir { color: transparent; pointer-events: none; user-select: none; }
+  #miroir .code, #miroir .cloture {
+    margin: 0 -16px; padding: 0 16px 0 13px; border-left: 3px solid var(--code-bord); background: var(--code);
+  }
+  #miroir .cloture { background: var(--code-cloture); }
+
+  /* Vignettes des images de l'onglet */
+  #images {
+    display: flex; gap: 8px; padding: 8px 16px; overflow-x: auto; border-top: 1px solid var(--bord);
+  }
+  #images[hidden] { display: none; }
+  #images button {
+    flex: none; position: relative; padding: 0; width: 64px; height: 64px; overflow: hidden;
+    border-radius: 8px; background: var(--appui);
+  }
+  #images img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #images .envoi img { opacity: .45; }
+  #images .envoi::after {
+    content: ''; position: absolute; inset: 22px; border: 3px solid var(--texte); border-right-color: transparent;
+    border-radius: 50%; animation: tourne 1s linear infinite;
+  }
+  #images .erreur { outline: 2px solid #d33; outline-offset: -2px; }
+  #images .erreur::after { content: '↻'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 24px; color: #d33; }
+  @keyframes tourne { to { transform: rotate(360deg); } }
+
+  nav {
+    display: flex; gap: 5px; padding: 8px 10px max(8px, env(safe-area-inset-bottom));
+    align-items: center; border-top: 1px solid var(--bord); font-size: 16px;
+  }
+  nav button { flex: 1 1 auto; min-width: 0; }
+  nav .format:not(#coller) { flex: 0 1 auto; min-width: 38px; }
+  button {
+    font: inherit; padding: 8px 10px; border: 1px solid var(--bord); border-radius: 8px;
+    background: var(--bouton); color: inherit; cursor: pointer;
+  }
+  nav button { padding: 7px 8px; white-space: nowrap; }
+  button:active { background: var(--appui); }
+
+
+  /* Visionneuse d'image */
+  #visionneuse {
+    position: fixed; inset: 0; z-index: 5; background: rgba(0,0,0,.92);
+    display: flex; flex-direction: column; padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+  }
+  #visionneuse[hidden] { display: none; }
+  #visionneuse img { flex: 1; min-height: 0; width: 100%; object-fit: contain; }
+  #visionneuse div { display: flex; gap: 8px; justify-content: center; padding-top: 12px; flex-wrap: wrap; }
+  #visionneuse button { background: #222; color: #fff; border-color: #444; }
+  #visionneuse .danger { background: #d33; border-color: #d33; }
+  #etat { flex: none; margin: 0 4px; width: 10px; height: 10px; border-radius: 50%; background: #ccc; }
+  #etat.ok { background: #3a3; }
+  #etat.err { background: #d33; }
+
+  #voile {
+    position: fixed; inset: 0; background: var(--voile);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  #voile[hidden] { display: none; }
+  #popup {
+    background: var(--fond); border-radius: 12px; padding: 20px; width: 100%; max-width: 360px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.25);
+  }
+  #popup p { margin: 0 0 16px; }
+  #popup input {
+    width: 100%; margin: 0 0 16px; padding: 8px; font: 14px ui-monospace, monospace;
+    border: 1px solid var(--bord); border-radius: 8px; background: var(--appui); color: inherit;
+  }
+  #popup input[hidden] { display: none; }
+  #boutons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+  #popup .danger { background: #d33; border-color: #d33; color: #fff; }
+  #popup .principal { background: var(--texte); border-color: var(--texte); color: var(--fond); }
+
+  #toast {
+    position: fixed; left: 50%; bottom: 72px; transform: translateX(-50%); z-index: 10;
+    max-width: calc(100% - 32px); text-align: center;
+    background: var(--texte); color: var(--fond); padding: 8px 16px; border-radius: 8px;
+    opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  #toast.visible { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="onglets" role="tablist">
+  <button role="tab">1</button>
+  <button role="tab">2</button>
+  <button role="tab">3</button>
+  <button id="lien" title="Lien secret de ce bloc-notes" aria-label="Lien secret">🔗</button>
+  <span id="etat" title="Synchronisation"></span>
+</div>
+<div id="zone">
+  <div id="miroir" aria-hidden="true"></div>
+  <textarea id="note" spellcheck="false" autofocus></textarea>
+</div>
+<div id="images" hidden></div>
+<nav>
+  <button id="puces" class="format" title="Liste à puces (encore : sous-niveau)" aria-label="Liste à puces">•</button>
+  <button id="numeros" class="format" title="Liste numérotée (encore : sous-niveau)" aria-label="Liste numérotée">1.</button>
+  <button id="code" class="format" title="Bloc de code" aria-label="Bloc de code">&lt;/&gt;</button>
+  <button id="effacer">Effacer</button>
+  <button id="copier">Copier</button>
+  <button id="coller" class="format">Coller</button>
+</nav>
+<div id="visionneuse" hidden role="dialog" aria-modal="true">
+  <img id="grande" alt="">
+  <div>
+    <button id="v-copier">Copier l'image</button>
+    <button id="v-supprimer" class="danger">Supprimer</button>
+    <button id="v-fermer">Fermer</button>
+  </div>
+</div>
+<div id="voile" hidden>
+  <div id="popup" role="dialog" aria-modal="true">
+    <p id="message"></p>
+    <input id="champ" hidden autocomplete="off" spellcheck="false">
+    <div id="boutons"></div>
+  </div>
+</div>
+<div id="toast" role="status"></div>
+<script src="config.js"></script>
+<script>
+(async () => {
+  // Quand le clavier du téléphone s'ouvre, la page se limite à la zone visible :
+  // les boutons du bas restent au-dessus du clavier (iOS ne redimensionne pas la page seul)
+  if (window.visualViewport) {
+    const suivre = () => {
+      document.body.style.height = visualViewport.height + 'px';
+      document.body.style.transform = visualViewport.offsetTop ? `translateY(${visualViewport.offsetTop}px)` : '';
+    };
+    visualViewport.addEventListener('resize', suivre);
+    visualViewport.addEventListener('scroll', suivre);
+    suivre();
+  }
+
+  const note = document.getElementById('note');
+  const etat = document.getElementById('etat');
+  const boutonsOnglets = [...document.querySelectorAll('#onglets [role="tab"]')];
+  const base = DATABASE_URL.replace(/\/$/, '');
+  const FORMAT_CLE = /^[A-Za-z0-9_-]{22,}$/;
+  // Page de test : ses notes, noms et images sont rangés à part (t1…, tn1…, ti1…), sans toucher
+  // aux notes de l'appli normale. Mettre '' pour l'appli normale.
+  const ESPACE = 't';
+
+  // Stockage local protégé (navigation privée, quota plein…)
+  const stock = {
+    lire(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    ecrire(k, v) { try { localStorage.setItem(k, v); } catch {} },
+    effacer(k) { try { localStorage.removeItem(k); } catch {} },
+  };
+
+  // Popup maison (remplace confirm/prompt du navigateur)
+  const voile = document.getElementById('voile');
+  const champ = document.getElementById('champ');
+  function popup({ message, valeurChamp, longueurMax, boutons, fermable = true }) {
+    document.getElementById('message').textContent = message;
+    champ.hidden = valeurChamp === undefined;
+    champ.value = valeurChamp || '';
+    if (longueurMax) champ.maxLength = longueurMax; else champ.removeAttribute('maxlength');
+    const zone = document.getElementById('boutons');
+    zone.replaceChildren();
+    voile.hidden = false;
+    return new Promise(resoudre => {
+      const fermer = valeur => {
+        voile.hidden = true;
+        voile.onclick = document.onkeydown = champ.onkeydown = null;
+        resoudre({ valeur, champ: champ.value.trim() });
+      };
+      boutons.forEach(({ texte, classe, valeur }) => {
+        const b = document.createElement('button');
+        b.textContent = texte;
+        if (classe) b.className = classe;
+        b.onclick = () => fermer(valeur);
+        zone.append(b);
+      });
+      champ.onkeydown = e => { if (e.key === 'Enter') fermer(boutons[boutons.length - 1].valeur); };
+      if (fermable) {
+        voile.onclick = e => { if (e.target === voile) fermer(null); };
+        document.onkeydown = e => { if (e.key === 'Escape') fermer(null); };
+      }
+      (champ.hidden ? zone.lastChild : champ).focus();
+    });
+  }
+
+  const toast = document.getElementById('toast');
+  function annoncer(message) {
+    toast.textContent = message;
+    toast.classList.add('visible');
+    clearTimeout(toast.minuteur);
+    toast.minuteur = setTimeout(() => toast.classList.remove('visible'), 1500);
+  }
+
+  // Clé secrète : dans l'adresse (#…), sinon mémorisée sur l'appareil
+  const extraireCle = texte => (texte.includes('#') ? texte.split('#').pop() : texte).trim();
+  const nouvelleCle = () => btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(18))))
+    .replace(/\+/g, '-').replace(/\//g, '_');
+  const lienSecret = cle => location.href.split('#')[0] + '#' + cle;
+
+  let cle = extraireCle(location.hash.slice(1));
+  if (!FORMAT_CLE.test(cle)) cle = stock.lire('cle') || '';
+  while (!FORMAT_CLE.test(cle)) {
+    const r = await popup({
+      message: 'Collez le lien secret de votre bloc-notes (bouton 🔗 sur un appareil déjà configuré), ou créez-en un nouveau.',
+      valeurChamp: '',
+      fermable: false,
+      boutons: [
+        { texte: 'Nouveau', valeur: 'nouveau' },
+        { texte: 'Ouvrir', classe: 'principal', valeur: 'ouvrir' },
+      ],
+    });
+    if (r.valeur === 'nouveau') cle = nouvelleCle();
+    else { cle = extraireCle(r.champ); if (!FORMAT_CLE.test(cle)) annoncer('Lien invalide'); }
+  }
+  stock.ecrire('cle', cle);
+  history.replaceState(null, '', lienSecret(cle));
+  window.addEventListener('hashchange', () => {
+    const autre = extraireCle(location.hash.slice(1));
+    if (FORMAT_CLE.test(autre) && autre !== cle) location.reload();
+  });
+  // Restes de la toute première version (sans clé)
+  ['note:note', 'note:note2', 'note:note3'].forEach(stock.effacer);
+
+  // ---- Fusion de textes ----
+  // Zone modifiée entre deux textes : [debut, fin) dans a, remplacée par b.slice(debut, b.length - (a.length - fin))
+  function zoneModifiee(a, b) {
+    let debut = 0;
+    while (debut < a.length && debut < b.length && a[debut] === b[debut]) debut++;
+    let fin = 0;
+    while (fin < a.length - debut && fin < b.length - debut && a[a.length - 1 - fin] === b[b.length - 1 - fin]) fin++;
+    return { debut, fin: a.length - fin, remplacement: b.slice(debut, b.length - fin) };
+  }
+
+  // Fusion à trois : modifications locales et distantes faites depuis la même version de départ.
+  // Si elles touchent des endroits différents, les deux sont gardées ; sinon le texte local l'emporte.
+  function fusionner(depart, local, distant) {
+    if (local === depart || local === distant) return distant;
+    if (distant === depart) return local;
+    const l = zoneModifiee(depart, local), d = zoneModifiee(depart, distant);
+    if (l.fin <= d.debut)
+      return depart.slice(0, l.debut) + l.remplacement + depart.slice(l.fin, d.debut) + d.remplacement + depart.slice(d.fin);
+    if (d.fin <= l.debut)
+      return depart.slice(0, d.debut) + d.remplacement + depart.slice(d.fin, l.debut) + l.remplacement + depart.slice(l.fin);
+    return local;
+  }
+
+  const cout = (a, b) => { const z = zoneModifiee(a, b); return z.fin - z.debut + z.remplacement.length; };
+
+  // Index des images mémorisé sur l'appareil (affichage immédiat, hors ligne compris)
+  function lireIndexLocal(cache) {
+    try { return validerIndex(JSON.parse(stock.lire(cache + ':images') || '[]')); } catch { return []; }
+  }
+  // Entrées d'index valides seulement (elles viennent du serveur)
+  function validerIndex(liste) {
+    return Array.isArray(liste) ? liste.filter(x => x && typeof x.id === 'string' && /^[\w-]{1,40}$/.test(x.id)
+      && Number.isInteger(x.n) && x.n >= 1 && x.n <= 200 && typeof x.mini === 'string' && x.mini.startsWith('data:image/')) : [];
+  }
+
+  // ---- Notes ----
+  // texte : contenu local ; depart : dernière version du serveur connue (le texte local en dérive) ;
+  // les deux sont mémorisés, donc une modification non envoyée survit à la fermeture de l'appli.
+  const onglets = ['1', '2', '3'].map(nom => {
+    const cache = `note:${cle}:${ESPACE}${nom}`;
+    const texte = stock.lire(cache) || '';
+    return {
+      url: `${base}/notes/${cle}/${ESPACE}${nom}.json`,
+      urlNom: `${base}/notes/${cle}/${ESPACE}n${nom}.json`,
+      urlIndex: `${base}/notes/${cle}/${ESPACE}i${nom}.json`,
+      images: lireIndexLocal(cache),   // images de l'onglet (index synchronisé)
+      etagIndex: null,
+      locales: [],                     // images ajoutées ici, en cours d'envoi
+      numero: nom,
+      nom: stock.lire(`${cache}:nom`) || '',
+      nomAEnvoyer: stock.lire(`${cache}:nom-a-envoyer`) === '1',
+      cache,
+      texte,
+      depart: stock.lire(cache + ':depart') ?? texte,
+      peutEtre: stock.lire(cache + ':envoye'), // envoyé à la fermeture, sans savoir si c'est arrivé
+      etag: null,        // version du serveur correspondant à « depart », pour les envois conditionnels
+      enCours: null,     // texte en cours d'envoi
+      aRelire: false,    // un changement distant est arrivé pendant un envoi
+      echec: false,      // le dernier envoi a échoué
+      occupe: false,     // envoi en cours de préparation ou en vol
+      envois: 0,         // nombre d'envois terminés (détecte les lectures périmées)
+      attenteDepuis: 0,  // début des modifications non envoyées
+      minuteur: null,
+    };
+  });
+  const aEnvoyer = o => o.texte !== o.depart;
+
+  // Point d'état : rouge si la dernière lecture a échoué ou si un envoi est en échec
+  let lectureEnEchec = false;
+  function majEtat() {
+    etat.className = lectureEnEchec || onglets.some(o => o.echec || o.locales.some(x => x.statut === 'erreur')) ? 'err' : 'ok';
+  }
+
+  let actif = onglets[+stock.lire(ESPACE + 'onglet')] || onglets[0];
+
+  function definir(o, { texte = o.texte, depart = o.depart }) {
+    const ancien = o.texte;
+    o.texte = texte;
+    o.depart = depart;
+    stock.ecrire(o.cache, texte);
+    stock.ecrire(o.cache + ':depart', depart);
+    if (o === actif && note.value !== texte) afficher(ancien, texte);
+    if (o === actif) dessinerMiroir();
+  }
+
+  // Remplace le texte affiché en gardant le curseur au bon endroit
+  function afficher(ancien, nouveau) {
+    if (note.value !== ancien || document.activeElement !== note) { note.value = nouveau; return; }
+    const z = zoneModifiee(ancien, nouveau);
+    const decalage = nouveau.length - ancien.length;
+    const placer = pos => pos <= z.debut ? pos : pos >= z.fin ? pos + decalage : z.debut + z.remplacement.length;
+    const debut = placer(note.selectionStart), fin = placer(note.selectionEnd);
+    note.value = nouveau;
+    note.setSelectionRange(debut, fin);
+  }
+
+  // Version du serveur reçue (flux, interrogation, réponse à un envoi refusé)
+  function recevoir(o, distant, etag) {
+    distant = typeof distant === 'string' ? distant : '';
+    if (o.enCours !== null) {
+      if (distant !== o.enCours) o.aRelire = true; // à revoir une fois l'envoi terminé
+      return;
+    }
+    if (o.peutEtre !== null) {
+      // L'envoi de dernière minute est-il arrivé ? La version de départ la plus probable
+      // est celle qui explique la version du serveur avec la plus petite modification.
+      if (cout(o.peutEtre, distant) < cout(o.depart, distant)) o.depart = o.peutEtre;
+      oublierPeutEtre(o);
+    }
+    if (distant === o.depart) { if (etag) o.etag = etag; return; }
+    o.etag = etag || null;
+    definir(o, { texte: fusionner(o.depart, o.texte, distant), depart: distant });
+    if (aEnvoyer(o)) planifier(o);
+  }
+
+  const entetesLecture = { 'X-Firebase-ETag': 'true' };
+  // Sans étiquette de version (proxy qui la supprimerait), envoi non conditionnel
+  const entetesEnvoi = o => o.etag ? { ...entetesLecture, 'if-match': o.etag } : entetesLecture;
+
+  // Lecture directe ; le paramètre t évite les réponses mises en cache par un proxy
+  async function lire(o) {
+    const envois = o.envois;
+    let r, data;
+    try {
+      // Avec la version connue, Firebase répond « 304 inchangé » sans renvoyer le texte
+      const entetes = o.etag ? { ...entetesLecture, 'if-none-match': o.etag } : entetesLecture;
+      r = await fetch(`${o.url}?t=${Date.now()}`, { cache: 'no-store', headers: entetes });
+      lectureEnEchec = false;
+      if (r.status === 304) return;
+      if (!r.ok) throw new Error(r.status);
+      data = await r.json();
+    } catch (e) {
+      lectureEnEchec = true;
+      throw e;
+    } finally {
+      majEtat();
+    }
+    // Réponse périmée si un envoi a eu lieu entre-temps
+    if (o.envois === envois && o.enCours === null) recevoir(o, data, r.headers.get('ETag'));
+  }
+
+  // Envoi conditionnel : refusé (412) si le serveur a changé depuis « depart »
+  async function envoyer(o) {
+    clearTimeout(o.minuteur);
+    o.minuteur = null;
+    if (o.occupe || !aEnvoyer(o)) return;
+    o.occupe = true; // un seul envoi à la fois par note
+    try {
+      if (!o.etag) await lire(o);
+      if (aEnvoyer(o)) {
+        const texte = o.texte;
+        o.enCours = texte;
+        o.attenteDepuis = 0;
+        let r;
+        try {
+          r = await fetch(o.url, { method: 'PUT', headers: entetesEnvoi(o), body: JSON.stringify(texte) });
+        } finally {
+          o.enCours = null;
+          o.envois++;
+        }
+        if (r.status === 412) {
+          // Quelqu'un a écrit entre-temps : fusionner avec sa version, puis renvoyer
+          o.etag = null;
+          recevoir(o, await r.json(), r.headers.get('ETag'));
+        } else if (r.ok) {
+          o.etag = r.headers.get('ETag');
+          definir(o, { depart: texte });
+          oublierPeutEtre(o);
+        } else {
+          throw new Error(r.status);
+        }
+      }
+      o.echec = false;
+    } catch {
+      o.echec = true;
+    } finally {
+      o.occupe = false;
+    }
+    majEtat();
+    if (o.echec) { o.minuteur = setTimeout(() => envoyer(o), 3000); return; }
+    if (o.aRelire) { o.aRelire = false; lire(o).catch(() => {}); }
+    if (aEnvoyer(o)) planifier(o, 0);
+  }
+
+  // Envoi 0,4 s après la dernière frappe, et au moins toutes les 1,5 s pendant une frappe continue
+  function planifier(o, delai = 400) {
+    const maintenant = Date.now();
+    o.attenteDepuis ||= maintenant;
+    clearTimeout(o.minuteur);
+    o.minuteur = setTimeout(() => envoyer(o), Math.min(delai, Math.max(0, o.attenteDepuis + 1500 - maintenant)));
+  }
+
+  function oublierPeutEtre(o) {
+    o.peutEtre = null;
+    stock.effacer(o.cache + ':envoye');
+  }
+
+  // Envoi de dernière minute quand l'appli passe en arrière-plan ou se ferme.
+  // Si la page survit, la réponse est traitée ; sinon le texte envoyé est mémorisé
+  // pour savoir, à la réouverture, s'il est arrivé.
+  function envoyerAvantFermeture() {
+    onglets.forEach(o => {
+      if (!aEnvoyer(o) || o.occupe || !o.etag) return; // seulement en envoi conditionnel
+      const texte = o.texte, corps = JSON.stringify(texte);
+      if (corps.length > 30000) return; // fetch keepalive est limité à 64 Ko : le texte partira à la réouverture
+      o.peutEtre = texte;
+      stock.ecrire(o.cache + ':envoye', texte);
+      o.occupe = true;
+      fetch(o.url, { method: 'PUT', keepalive: true, headers: entetesEnvoi(o), body: corps })
+        .then(r => {
+          if (r.ok) { o.etag = r.headers.get('ETag'); o.envois++; definir(o, { depart: texte }); }
+          if (r.status === 412 || r.ok) oublierPeutEtre(o);
+        })
+        .catch(() => {})
+        .finally(() => { o.occupe = false; if (aEnvoyer(o) && !document.hidden) planifier(o, 0); });
+    });
+  }
+
+  // ---- Réception ----
+  // Flux en direct (Server-Sent Events) pour l'onglet affiché, plus une interrogation toutes les 2 s :
+  // certains proxys d'entreprise retiennent le flux ou ne le livrent que par paquets.
+  // Si le flux n'arrive jamais, on n'utilise plus que l'interrogation.
+  let flux, dernierSignal = 0;
+  let fluxBloque = false, minuteurSondage, minuteurSecours, tourSondage = 0;
+
+  async function sonder(o) {
+    clearTimeout(minuteurSondage);
+    const tour = tourSondage;
+    if (!document.hidden) {
+      try { await lire(o); } catch {}
+      try { await lireIndex(o); } catch {}
+    }
+    if (o === actif && tour === tourSondage) minuteurSondage = setTimeout(() => sonder(o), 2000);
+  }
+
+  function ecouter(o) {
+    if (flux) flux.close();
+    clearTimeout(minuteurSondage);
+    clearTimeout(minuteurSecours);
+    tourSondage++;
+    sonder(o);
+    if (fluxBloque) return;
+    flux = new EventSource(o.url);
+    dernierSignal = Date.now();
+    // Firebase envoie la valeur dès l'ouverture : rien après 5 s = flux bloqué
+    minuteurSecours = setTimeout(() => { fluxBloque = true; flux.close(); }, 5000);
+    flux.addEventListener('put', e => {
+      clearTimeout(minuteurSecours);
+      dernierSignal = Date.now();
+      const { path, data } = JSON.parse(e.data);
+      // Les événements du flux peuvent arriver en retard ou dans le désordre (proxy, réseau mobile) :
+      // leur contenu pourrait être une ancienne version de nos propres envois. Ils servent donc
+      // de signal : on relit la version actuelle du serveur.
+      if (path === '/' && (typeof data === 'string' ? data : '') !== o.depart) lire(o).catch(() => {});
+    });
+    flux.addEventListener('keep-alive', () => { dernierSignal = Date.now(); });
+    flux.addEventListener('cancel', () => { lectureEnEchec = true; majEtat(); }); // accès refusé par les règles
+  }
+
+  // Les connexions meurent souvent sans prévenir (téléphone en veille, changement de réseau) :
+  // on se reconnecte au retour sur l'appli, au retour du réseau, ou après 75 s de silence du flux
+  // (Firebase envoie un signal toutes les 30 s environ)
+  function reprendre() {
+    ecouter(actif);
+    lireNoms();
+    onglets.forEach(o => { if (aEnvoyer(o)) envoyer(o); });
+    reessayerImages();
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) envoyerAvantFermeture(); else reprendre();
+  });
+  window.addEventListener('pagehide', envoyerAvantFermeture);
+  window.addEventListener('online', reprendre);
+  window.addEventListener('pageshow', e => { if (e.persisted) reprendre(); });
+  setInterval(() => {
+    if (!fluxBloque && !document.hidden && (flux.readyState === EventSource.CLOSED || Date.now() - dernierSignal > 75000)) reprendre();
+  }, 15000);
+
+  // ---- Noms des onglets (synchronisés, rarement modifiés : lus toutes les 10 s) ----
+  const titre = o => o.nom || o.numero;
+  function afficherNoms() {
+    boutonsOnglets.forEach((b, i) => { b.textContent = titre(onglets[i]); b.title = titre(onglets[i]); });
+  }
+
+  function definirNom(o, nom, aEnvoyer) {
+    o.nom = nom;
+    o.nomAEnvoyer = aEnvoyer;
+    stock.ecrire(o.cache + ':nom', nom);
+    stock.ecrire(o.cache + ':nom-a-envoyer', aEnvoyer ? '1' : '');
+    afficherNoms();
+  }
+
+  async function lireNoms() {
+    if (document.hidden) return;
+    await Promise.all(onglets.map(async o => {
+      if (o.nomAEnvoyer) return envoyerNom(o);
+      try {
+        const r = await fetch(`${o.urlNom}?t=${Date.now()}`, { cache: 'no-store' });
+        if (!r.ok) return;
+        const nom = await r.json();
+        if (!o.nomAEnvoyer) definirNom(o, typeof nom === 'string' ? nom : '', false);
+      } catch {}
+    }));
+  }
+
+  async function envoyerNom(o) {
+    const nom = o.nom;
+    try {
+      const r = await fetch(o.urlNom, { method: 'PUT', body: JSON.stringify(nom) });
+      if (r.ok && o.nom === nom) definirNom(o, nom, false);
+    } catch {}
+  }
+
+  setInterval(lireNoms, 10000);
+
+  async function renommer(o) {
+    const r = await popup({
+      message: `Nom de l'onglet ${o.numero} (vide = « ${o.numero} »)`,
+      valeurChamp: o.nom,
+      longueurMax: 20,
+      boutons: [{ texte: 'Annuler', valeur: false }, { texte: 'Renommer', classe: 'principal', valeur: true }],
+    });
+    if (!r.valeur) return;
+    const nom = r.champ.slice(0, 20).trim();
+    if (nom === o.nom) return;
+    definirNom(o, nom, true);
+    envoyerNom(o);
+  }
+
+  // ---- Interface ----
+  function choisir(o) {
+    actif = o;
+    boutonsOnglets.forEach((b, i) => b.setAttribute('aria-selected', onglets[i] === o));
+    note.value = o.texte;
+    dessinerMiroir();
+    afficherImages();
+    stock.ecrire(ESPACE + 'onglet', onglets.indexOf(o));
+    ecouter(o);
+  }
+
+  // Toucher l'onglet déjà affiché permet de le renommer
+  boutonsOnglets.forEach((b, i) => b.onclick = () => {
+    if (onglets[i] !== actif) choisir(onglets[i]); else renommer(actif);
+  });
+
+  note.addEventListener('input', () => {
+    definir(actif, { texte: note.value });
+    planifier(actif);
+  });
+
+  // ---- Puces et numérotation ----
+  // Texte brut en syntaxe Markdown (« - » et « 1. », retrait de 2 espaces) : Claude la comprend
+  // et le texte se colle tel quel dans un prompt.
+  // Reconnus : puces - * + • – — ▪ ◦ ‣ · ; numéros 1. 1) ; lettres a) (les claviers de téléphone
+  // remplacent souvent « - » par un tiret long)
+  const LISTE = /^([ \t]*)(?:([-*+•–—▪◦‣·])|(\d+|[a-zA-Z](?=\)))([.)]))[ \t]+/;
+  const ITEM_VIDE = /^[ \t]*(?:[-*+•–—▪◦‣·]|\d+[.)]|[a-zA-Z]\))[ \t]*$/;
+  const RETRAIT = '  ';
+  const MOINS_UN_RETRAIT = /^( {1,2}|\t)/;
+  // Style par niveau de retrait : un retrait ouvre un sous-niveau d'un autre type (chapitres)
+  const STYLES_PUCES = ['-', '•', '◦'];
+  const STYLES_NUMEROS = [['d', '.'], ['l', ')'], ['d', ')']]; // 1.  a)  1)
+  let interne = false;
+
+  // Remplace [debut, fin) en gardant l'historique d'annulation (Ctrl+Z) du navigateur
+  function remplacer(debut, fin, texte) {
+    interne = true;
+    note.focus();
+    note.setSelectionRange(debut, fin);
+    let ok = true;
+    if (texte) ok = document.execCommand('insertText', false, texte);
+    else if (debut < fin) ok = document.execCommand('delete');
+    if (!ok) {
+      note.setRangeText(texte, debut, fin, 'end');
+      note.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    interne = false;
+  }
+
+  // Position d'un curseur (décalage dans le texte) ↔ (ligne, colonne)
+  function pointer(lignes, decalage) {
+    let p = 0;
+    for (let i = 0; i < lignes.length; i++) {
+      if (decalage <= p + lignes[i].length) return [i, decalage - p];
+      p += lignes[i].length + 1;
+    }
+    return [lignes.length - 1, lignes[lignes.length - 1].length];
+  }
+  const decalageDe = (lignes, i, col) => lignes.slice(0, i).reduce((t, l) => t + l.length + 1, 0) + col;
+
+  // Décompose une ligne de liste (null si ce n'en est pas une)
+  function analyser(ligne) {
+    const m = LISTE.exec(ligne);
+    if (!m) return null;
+    const it = {
+      retrait: m[1],
+      prof: Math.floor(m[1].replace(/\t/g, RETRAIT).length / 2),
+      marque: m[0].slice(m[1].length).trim(),
+      corps: ligne.slice(m[0].length),
+    };
+    if (m[2]) it.puce = m[2];
+    else {
+      it.delim = m[4];
+      if (/\d/.test(m[3])) { it.type = 'd'; it.n = +m[3]; }
+      else { it.type = m[3] === m[3].toLowerCase() ? 'l' : 'L'; it.n = m[3].toLowerCase().charCodeAt(0) - 96; }
+    }
+    return it;
+  }
+  const valeur = it => it.type === 'd' || it.n > 26 ? String(it.n) : String.fromCharCode((it.type === 'L' ? 64 : 96) + it.n);
+  const marqueDe = it => it.puce || valeur(it) + it.delim;
+
+  // Recalcule les marqueurs des lignes lignes[debut..fin] (créées ou décalées) puis renumérote
+  // les éléments qui les suivent dans la même liste. Un élément prend le style de son niveau :
+  // celui du précédent au même niveau s'il y en a un (« 4. » redevient « 2. » après « a) b) »),
+  // sinon le style par défaut du niveau (1. → a) → 1)).
+  function normaliser(lignes, debut, fin) {
+    const estListe = l => LISTE.test(l);
+    let i = 0;
+    while (i < lignes.length) {
+      if (!estListe(lignes[i])) { i++; continue; }
+      // une liste = éléments consécutifs, lignes vides tolérées entre eux
+      let dernier = i;
+      for (let j = i + 1; j < lignes.length && (estListe(lignes[j]) || !lignes[j].trim()); j++)
+        if (estListe(lignes[j])) dernier = j;
+      if (dernier >= debut && i <= fin) normaliserListe(lignes, i, dernier, debut, fin);
+      i = dernier + 1;
+    }
+  }
+
+  function normaliserListe(lignes, a, b, debut, fin) {
+    const pile = []; // dernier élément vu à chaque niveau
+    for (let i = a; i <= b; i++) {
+      const it = analyser(lignes[i]);
+      if (!it) continue;
+      pile.length = Math.min(pile.length, it.prof + 1);
+      const prec = pile[it.prof];
+      const memeNature = prec && !!prec.puce === !!it.puce;
+      if (i >= debut && i <= fin) {
+        if (memeNature && it.puce) it.puce = prec.puce;
+        else if (memeNature) Object.assign(it, { type: prec.type, delim: prec.delim, n: prec.n + 1 });
+        else if (it.puce) it.puce = STYLES_PUCES[it.prof % STYLES_PUCES.length];
+        else {
+          const [type, delim] = STYLES_NUMEROS[it.prof % STYLES_NUMEROS.length];
+          Object.assign(it, { type, delim, n: 1 });
+        }
+      } else if (i > fin && memeNature && !it.puce) {
+        it.n = prec.n + 1;
+      }
+      if (marqueDe(it) !== it.marque) lignes[i] = it.retrait + marqueDe(it) + ' ' + it.corps;
+      pile[it.prof] = it;
+    }
+  }
+
+  // Remplace le texte (une seule modification, annulable d'un Ctrl+Z) et place la sélection
+  function appliquer(lignes, debut, fin) {
+    const nouveau = lignes.join('\n');
+    if (nouveau !== note.value) {
+      const z = zoneModifiee(note.value, nouveau);
+      remplacer(z.debut, z.fin, z.remplacement);
+    }
+    note.setSelectionRange(debut, fin);
+  }
+
+  // Applique une modification aux lignes touchées par la sélection, puis recalcule les marqueurs
+  function transformer(modifier) {
+    const avant = note.value.split('\n'), apres = avant.slice();
+    const [i0] = pointer(avant, note.selectionStart);
+    let [i1, col1] = pointer(avant, note.selectionEnd);
+    if (note.selectionEnd > note.selectionStart && col1 === 0 && i1 > i0) i1--; // sélection finissant en début de ligne
+    modifier(apres, i0, i1);
+    if (apres.every((l, i) => l === avant[i])) return;
+    normaliser(apres, i0, i1);
+    let debut, fin;
+    if (note.selectionStart === note.selectionEnd) {
+      // curseur : même distance à la fin de sa ligne
+      const [i, col] = pointer(avant, note.selectionStart);
+      debut = fin = decalageDe(apres, i, Math.max(0, apres[i].length - (avant[i].length - col)));
+    } else {
+      debut = decalageDe(apres, i0, 0);
+      fin = decalageDe(apres, i1, apres[i1].length);
+    }
+    appliquer(apres, debut, fin);
+  }
+
+  // Met les lignes en liste ; si elles y sont déjà, les en retire
+  function mettreListe(type) {
+    transformer((l, i0, i1) => {
+      const concernees = [];
+      for (let i = i0; i <= i1; i++) if (i0 === i1 || l[i].trim()) concernees.push(i);
+      const retirer = concernees.every(i => { const it = analyser(l[i]); return it && (type === 'puce' ? it.puce : !it.puce); });
+      concernees.forEach(i => {
+        const it = analyser(l[i]);
+        const retrait = it ? it.retrait : /^[ \t]*/.exec(l[i])[0];
+        const corps = it ? it.corps : l[i].slice(retrait.length);
+        l[i] = retirer ? retrait + corps : retrait + (type === 'puce' ? '- ' : '1. ') + corps;
+      });
+    });
+  }
+
+  function decaler(sens) {
+    transformer((l, i0, i1) => {
+      for (let i = i0; i <= i1; i++)
+        l[i] = sens > 0 ? (i0 === i1 || l[i].trim() ? RETRAIT + l[i] : l[i]) : l[i].replace(MOINS_UN_RETRAIT, '');
+    });
+  }
+
+  // Entrée : lignes[k-1] est l'élément qui vient d'être terminé, lignes[k] le reste du texte.
+  // Renvoie la position du curseur [ligne, colonne], ou null si ce n'est pas une liste.
+  function continuer(lignes, k) {
+    const it = analyser(lignes[k - 1]);
+    if (!it) return null;
+    if (!it.corps.trim() && !lignes[k].trim()) {
+      // élément vide : remonter d'un niveau s'il est en retrait, sinon quitter la liste
+      lignes.splice(k, 1);
+      k--;
+      lignes[k] = it.retrait ? lignes[k].replace(MOINS_UN_RETRAIT, '') : '';
+      if (it.retrait) normaliser(lignes, k, k);
+      return [k, lignes[k].length];
+    }
+    lignes[k] = it.retrait + (it.puce || '1.') + ' ' + lignes[k];
+    normaliser(lignes, k, k); // marqueur suivant ; les éléments d'après sont renumérotés
+    return [k, LISTE.exec(lignes[k])[0].length];
+  }
+
+  const SAUT_DE_LIGNE = /^(insertLineBreak|insertParagraph)$/;
+
+  // Collage de texte, ou clavier qui envoie le texte ligne par ligne : on n'interprète rien,
+  // sinon des lignes de code ressemblant à des listes (« * », « - », « 1. ») seraient modifiées.
+  // Sont considérés comme un collage : un collage ou glisser-déposer, un bloc de texte d'un coup,
+  // ou un saut de ligne arrivant moins de 15 ms après le texte précédent (impossible à la main).
+  // La protection dure 0,6 s et se prolonge tant que le texte arrive en rafale (écarts < 100 ms).
+  const COLLAGE = /^(insertFromPaste|insertFromDrop|insertFromYank|insertReplacementText)$/;
+  let dernierTexte = 0, collageJusqua = 0;
+  const maintenant = () => performance.now();
+  function collageEnCours(e) {
+    const t = maintenant(), ecart = t - dernierTexte;
+    if (COLLAGE.test(e.inputType) || (e.data && (e.data.length > 50 || e.data.includes('\n')))) collageJusqua = t + 600;
+    else if (SAUT_DE_LIGNE.test(e.inputType) && ecart < 15) collageJusqua = t + 600;
+    else if (t < collageJusqua && ecart < 100) collageJusqua = t + 600;
+    if (!e.isComposing && e.inputType !== 'insertCompositionText') dernierTexte = t;
+    return t < collageJusqua;
+  }
+  note.addEventListener('paste', () => { collageJusqua = maintenant() + 600; });
+
+  // Entrée dans une liste : le navigateur insère le saut de ligne normalement ; 0,15 s plus tard,
+  // si rien d'autre n'a été saisi entre-temps, la liste est continuée (ou quittée sur un élément vide).
+  // Si du texte arrive aussitôt (collage, clavier qui envoie le texte ligne par ligne), on n'y touche pas.
+  let jeton = 0;
+  note.addEventListener('beforeinput', e => {
+    if (interne) return;
+    collageEnCours(e);
+    jeton++; // tout nouveau texte annule une continuation en attente
+    // Retour arrière juste après « - », « 1. »… : remonte d'un niveau, ou retire le marqueur au niveau 0
+    if (e.inputType !== 'deleteContentBackward' || !e.cancelable || note.selectionStart !== note.selectionEnd) return;
+    const lignes = note.value.split('\n');
+    const [i, col] = pointer(lignes, note.selectionStart);
+    const m = LISTE.exec(lignes[i]);
+    if (!m || col !== m[0].length || blocsDeCode(lignes).estCode[i]) return;
+    e.preventDefault();
+    if (m[1]) { lignes[i] = lignes[i].replace(MOINS_UN_RETRAIT, ''); normaliser(lignes, i, i); }
+    else lignes[i] = lignes[i].slice(m[0].length);
+    const fin = LISTE.exec(lignes[i]);
+    const curseur = decalageDe(lignes, i, fin ? fin[0].length : 0);
+    appliquer(lignes, curseur, curseur);
+  });
+  note.addEventListener('input', e => {
+    if (interne || !SAUT_DE_LIGNE.test(e.inputType) || maintenant() < collageJusqua) return;
+    if (note.selectionStart !== note.selectionEnd) return;
+    const mon = jeton, valeur = note.value, pos = note.selectionStart;
+    setTimeout(() => {
+      if (jeton !== mon || note.value !== valeur || note.selectionStart !== pos || note.selectionEnd !== pos) return;
+      if (navigator.scheduling?.isInputPending?.()) return; // du texte est déjà en route
+      const lignes = valeur.split('\n');
+      const [k, col] = pointer(lignes, pos);
+      if (k === 0 || col !== 0) return; // le curseur est au début de la nouvelle ligne
+      if (blocsDeCode(lignes).estCode[k - 1]) return; // pas de listes dans le code
+      const c = continuer(lignes, k);
+      if (!c) return;
+      const curseur = decalageDe(lignes, c[0], c[1]);
+      appliquer(lignes, curseur, curseur);
+    }, 150);
+  });
+
+  // Tab / Maj+Tab décalent les éléments de liste (ailleurs, Tab garde son rôle normal)
+  note.addEventListener('keydown', e => {
+    if (e.key !== 'Tab' || e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return;
+    const lignes = note.value.split('\n');
+    const [i0] = pointer(lignes, note.selectionStart), [i1] = pointer(lignes, note.selectionEnd);
+    if (blocsDeCode(lignes).estCode[i0]) { e.preventDefault(); tabulerCode(lignes, i0, i1, e.shiftKey); return; }
+    if (!lignes.slice(i0, i1 + 1).some(l => LISTE.test(l))) return;
+    e.preventDefault();
+    decaler(e.shiftKey ? -1 : 1);
+  });
+
+  // ---- Blocs de code (``` … ```) ----
+  // Syntaxe Markdown : Claude reconnaît le code. À l'écran, un bandeau coloré marque chaque bloc.
+  const CLOTURE = /^\s*```/;
+  function blocsDeCode(lignes) {
+    const estCode = new Array(lignes.length).fill(false), blocs = [];
+    let ouvert = -1;
+    lignes.forEach((l, i) => {
+      if (!CLOTURE.test(l)) return;
+      if (ouvert < 0) { ouvert = i; return; }
+      blocs.push({ debut: ouvert, fin: i, ferme: true });
+      ouvert = -1;
+    });
+    if (ouvert >= 0) blocs.push({ debut: ouvert, fin: lignes.length - 1, ferme: false }); // non fermé : jusqu'à la fin
+    blocs.forEach(b => { for (let i = b.debut; i <= b.fin; i++) estCode[i] = true; });
+    return { estCode, blocs };
+  }
+
+  // Le miroir reproduit le texte ligne par ligne (même police, même largeur, texte invisible)
+  // pour peindre le fond des blocs de code derrière la zone de texte.
+  const miroir = document.getElementById('miroir');
+  const echapper = t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  function dessinerMiroir() {
+    const v = note.value;
+    if (!v.includes('```')) { if (miroir.firstChild) miroir.replaceChildren(); return; }
+    const lignes = v.split('\n'), { estCode } = blocsDeCode(lignes);
+    miroir.innerHTML = lignes.map((l, i) => {
+      const classe = estCode[i] ? (CLOTURE.test(l) ? ' class="cloture"' : ' class="code"') : '';
+      return `<div${classe}>${l ? echapper(l) : '<br>'}</div>`;
+    }).join('');
+    miroir.scrollTop = note.scrollTop;
+  }
+  note.addEventListener('scroll', () => { miroir.scrollTop = note.scrollTop; });
+
+  // Bouton </> : entoure la sélection (ou la ligne) de ```, ou retire les ``` du bloc où se trouve le curseur
+  function basculerCode() {
+    const lignes = note.value.split('\n');
+    const [i0] = pointer(lignes, note.selectionStart);
+    let [i1, col1] = pointer(lignes, note.selectionEnd);
+    if (note.selectionEnd > note.selectionStart && col1 === 0 && i1 > i0) i1--;
+    const bloc = blocsDeCode(lignes).blocs.find(b => i0 >= b.debut && i0 <= b.fin);
+    if (bloc) {
+      // le curseur recule de la longueur de la ligne ``` d'ouverture retirée
+      const pos = note.selectionStart, debutBloc = decalageDe(lignes, bloc.debut, 0);
+      const curseur = Math.max(debutBloc, pos - (lignes[bloc.debut].length + 1));
+      if (bloc.ferme) lignes.splice(bloc.fin, 1);
+      lignes.splice(bloc.debut, 1);
+      appliquer(lignes, curseur, curseur);
+      annoncer('Bloc de code retiré');
+      return;
+    }
+    if (i0 === i1 && !lignes[i0].trim()) {
+      lignes.splice(i0, 1, '```', '', '```');
+      const curseur = decalageDe(lignes, i0 + 1, 0);
+      appliquer(lignes, curseur, curseur);
+      return;
+    }
+    lignes.splice(i1 + 1, 0, '```');
+    lignes.splice(i0, 0, '```');
+    appliquer(lignes, decalageDe(lignes, i0 + 1, 0), decalageDe(lignes, i1 + 1, lignes[i1 + 1].length));
+  }
+
+  // Tab dans un bloc de code : 2 espaces (Maj+Tab : en retire 2), sans renuméroter de listes
+  function tabulerCode(lignes, i0, i1, retirer) {
+    const pos = note.selectionStart;
+    if (!retirer && note.selectionStart === note.selectionEnd) { remplacer(pos, pos, RETRAIT); return; }
+    const avant = lignes.slice();
+    for (let i = i0; i <= i1; i++) lignes[i] = retirer ? lignes[i].replace(MOINS_UN_RETRAIT, '') : RETRAIT + lignes[i];
+    if (note.selectionStart === note.selectionEnd) {
+      const [i, col] = pointer(avant, pos);
+      const c = decalageDe(lignes, i, Math.max(0, lignes[i].length - (avant[i].length - col)));
+      appliquer(lignes, c, c);
+    } else {
+      appliquer(lignes, decalageDe(lignes, i0, 0), decalageDe(lignes, i1, lignes[i1].length));
+    }
+  }
+
+  // Texte qui ressemble à du code (collage) : au moins 3 lignes, dont 60 % ont des indices de code.
+  // Les lignes de liste ne comptent pas comme indices (un prompt avec des sous-listes n'est pas du code).
+  const INDICES_CODE = [
+    /[{};]\s*$/, /=>|===|!==|&&|\|\||::|->|\+=/, /\w\([^)]*\)/,
+    /^\s*(function|const|let|var|if|else|for|while|return|import|export|from|class|def|public|private|protected|static|async|await|try|catch|switch|case|#include|using|package|namespace|SELECT|INSERT|UPDATE|DELETE|CREATE)\b/,
+    /^\s*<\/?[a-zA-Z][\w-]*(\s[^>]*)?\/?>/, /^\s*(\/\/|\/\*|\*\/|#!)/, /^(\t| {2,})\S/,
+  ];
+  function ressembleACode(texte) {
+    const lignes = texte.split('\n').filter(l => l.trim());
+    if (lignes.length < 3 || texte.includes('```')) return false;
+    const indices = lignes.filter(l => !LISTE.test(l) && INDICES_CODE.some(r => r.test(l))).length;
+    return indices >= 3 && indices / lignes.length >= 0.6;
+  }
+
+  // Insère du texte au curseur (bouton Coller, collage de code) ; le code est entouré de ```
+  function insererTexte(texte) {
+    texte = texte.replace(/\r\n?/g, '\n');
+    const lignes = note.value.split('\n');
+    const [i] = pointer(lignes, note.selectionStart);
+    let code = false;
+    if (ressembleACode(texte) && !blocsDeCode(lignes).estCode[i]) {
+      const v = note.value, d = note.selectionStart, f = note.selectionEnd;
+      const avant = d > 0 && v[d - 1] !== '\n' ? '\n' : '';
+      const apres = f < v.length && v[f] !== '\n' ? '\n' : '';
+      texte = `${avant}\`\`\`\n${texte.replace(/\n+$/, '')}\n\`\`\`${apres}`;
+      code = true;
+    }
+    collageJusqua = maintenant() + 600;
+    remplacer(note.selectionStart, note.selectionEnd, texte);
+    if (code) annoncer('Code détecté : entouré de ``` (bouton </> pour retirer)');
+  }
+
+  // ---- Images ----
+  // Compressées dans le navigateur (1568 px au plus : Claude réduit de toute façon au-delà),
+  // en WebP (JPEG si le navigateur ne sait pas l'écrire), découpées en morceaux de texte dans
+  // Firebase (même domaine et même format JSON que les notes : passe les proxys d'entreprise).
+  // L'index de l'onglet (petites vignettes comprises) est synchronisé comme le reste ;
+  // les images complètes sont téléchargées une fois puis gardées sur l'appareil.
+  const MAX_COTE = 1568, MAX_IMAGES = 10, TAILLE_MORCEAU = 150000, COTE_VIGNETTE = 200;
+  const urlMorceau = (id, k) => `${base}/images/${cle}/${id}/${k}.json`;
+  const urlImage = id => `${base}/images/${cle}/${id}.json`;
+  const imagesCompletes = new Map(); // id → data URL de l'image complète
+  const zoneImages = document.getElementById('images');
+
+  // Stockage des images complètes sur l'appareil (IndexedDB ; sans lui, tout reste en mémoire)
+  const idb = (() => {
+    let base;
+    const ouvrir = () => base ||= new Promise((ok, ko) => {
+      const r = indexedDB.open('note-images', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('img');
+      r.onsuccess = () => ok(r.result);
+      r.onerror = () => ko(r.error);
+    });
+    const op = async (mode, f) => {
+      const d = await ouvrir();
+      return new Promise((ok, ko) => {
+        const t = d.transaction('img', mode), req = f(t.objectStore('img'));
+        t.oncomplete = () => ok(req.result);
+        t.onerror = () => ko(t.error);
+      });
+    };
+    return {
+      lire: id => op('readonly', s => s.get(id)).catch(() => null),
+      ecrire: (id, v) => op('readwrite', s => s.put(v, id)).catch(() => {}),
+      effacer: id => op('readwrite', s => s.delete(id)).catch(() => {}),
+    };
+  })();
+
+  const nouvelId = () => 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const enDataURL = blob => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(blob); });
+  const versBlob = donnees => fetch(donnees).then(r => r.blob());
+  const toBlob = (c, type, q) => new Promise(ok => c.toBlob(ok, type, q));
+
+  async function chargerImage(blob) {
+    if (window.createImageBitmap) { try { return await createImageBitmap(blob); } catch {} }
+    const url = URL.createObjectURL(blob);
+    try {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      return img;
+    } finally { URL.revokeObjectURL(url); }
+  }
+
+  function dessiner(img, cote, fondBlanc) {
+    const w = img.width, h = img.height, k = Math.min(1, cote / Math.max(w, h));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(w * k));
+    c.height = Math.max(1, Math.round(h * k));
+    const x = c.getContext('2d');
+    if (fondBlanc) { x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); }
+    x.drawImage(img, 0, 0, c.width, c.height);
+    return c;
+  }
+
+  async function preparerImage(blob) {
+    const img = await chargerImage(blob);
+    const c = dessiner(img, MAX_COTE, false);
+    let out = await toBlob(c, 'image/webp', 0.82);
+    if (!out || out.type !== 'image/webp') out = await toBlob(dessiner(img, MAX_COTE, true), 'image/jpeg', 0.85);
+    const mini = await toBlob(dessiner(img, COTE_VIGNETTE, true), 'image/jpeg', 0.6);
+    return { donnees: await enDataURL(out), mini: await enDataURL(mini), w: c.width, h: c.height };
+  }
+
+  // Conversion en PNG, seul format d'image accepté par le presse-papiers
+  async function enPng(donnees) {
+    const c = dessiner(await chargerImage(await versBlob(donnees)), 1e9, false);
+    return toBlob(c, 'image/png');
+  }
+
+  function afficherImages() {
+    const o = actif, liste = [...o.images.map(x => ({ ...x, statut: 'ok' })), ...o.locales];
+    zoneImages.hidden = !liste.length;
+    zoneImages.replaceChildren(...liste.map(x => {
+      const b = document.createElement('button');
+      b.className = x.statut === 'ok' ? '' : x.statut === 'erreur' ? 'erreur' : 'envoi';
+      b.title = x.statut === 'erreur' ? 'Envoi impossible : toucher pour réessayer' : 'Voir l\'image';
+      if (x.mini) { const img = document.createElement('img'); img.src = x.mini; img.alt = ''; b.append(img); }
+      b.addEventListener('mousedown', e => e.preventDefault());
+      b.onclick = () => x.statut === 'erreur' ? televerser(o, x) : ouvrirImage(o, x.id);
+      return b;
+    }));
+  }
+
+  function enregistrerIndex(o, liste, etag) {
+    o.images = validerIndex(liste);
+    if (etag !== undefined) o.etagIndex = etag;
+    stock.ecrire(o.cache + ':images', JSON.stringify(o.images));
+    if (o === actif) afficherImages();
+    telechargerImages(o);
+  }
+
+  // Lecture de l'index (304 si inchangé)
+  async function lireIndex(o) {
+    const entetes = o.etagIndex ? { ...entetesLecture, 'if-none-match': o.etagIndex } : entetesLecture;
+    const r = await fetch(`${o.urlIndex}?t=${Date.now()}`, { cache: 'no-store', headers: entetes });
+    if (r.status === 304) return;
+    if (!r.ok) throw new Error(r.status);
+    const brut = await r.json();
+    let liste = [];
+    try { liste = typeof brut === 'string' ? JSON.parse(brut) : []; } catch {}
+    enregistrerIndex(o, liste, r.headers.get('ETag'));
+  }
+
+  // Modifie l'index : lecture, modification, envoi conditionnel ; recommence si un autre appareil a écrit entre-temps
+  async function modifierIndex(o, modifier) {
+    for (let essai = 0; essai < 8; essai++) {
+      const r = await fetch(`${o.urlIndex}?t=${Date.now()}`, { cache: 'no-store', headers: entetesLecture });
+      if (!r.ok) throw new Error(r.status);
+      const brut = await r.json(), etag = r.headers.get('ETag');
+      let liste = [];
+      try { liste = typeof brut === 'string' ? validerIndex(JSON.parse(brut)) : []; } catch {}
+      const nouvelle = modifier(liste);
+      const corps = nouvelle.length ? JSON.stringify(JSON.stringify(nouvelle)) : 'null';
+      const e = await fetch(o.urlIndex, { method: 'PUT', headers: etag ? { ...entetesLecture, 'if-match': etag } : entetesLecture, body: corps });
+      if (e.status === 412) continue;
+      if (!e.ok) throw new Error(e.status);
+      enregistrerIndex(o, nouvelle, e.headers.get('ETag'));
+      return;
+    }
+    throw new Error('index occupé');
+  }
+
+  async function envoyerMorceau(url, morceau) {
+    for (let essai = 0; ; essai++) {
+      try {
+        const r = await fetch(url, { method: 'PUT', body: JSON.stringify(morceau) });
+        if (r.ok) return;
+        throw new Error(r.status);
+      } catch (e) {
+        if (essai >= 2) throw e;
+        await new Promise(ok => setTimeout(ok, 1000 * (essai + 1)));
+      }
+    }
+  }
+
+  async function televerser(o, local) {
+    if (local.enCours) return;
+    local.enCours = true;
+    local.statut = 'envoi';
+    if (o === actif) afficherImages();
+    try {
+      // après un échec, morceaux deux fois plus petits (proxy qui limiterait la taille des requêtes)
+      const taille = local.taille ||= TAILLE_MORCEAU;
+      const morceaux = [];
+      for (let k = 0; k < local.donnees.length; k += taille) morceaux.push(local.donnees.slice(k, k + taille));
+      for (let k = 0; k < morceaux.length; k++) await envoyerMorceau(urlMorceau(local.id, k), morceaux[k]);
+      // l'image n'apparaît ailleurs qu'une fois tous ses morceaux arrivés
+      const entree = { id: local.id, n: morceaux.length, w: local.w, h: local.h, mini: local.mini, t: Date.now() };
+      if (local.supprimee) return; // supprimée pendant l'envoi
+      await modifierIndex(o, liste => liste.some(x => x.id === local.id) ? liste : [...liste, entree]);
+      o.locales = o.locales.filter(x => x !== local);
+    } catch {
+      local.statut = 'erreur';
+      local.taille = Math.max(20000, Math.ceil(Math.min(local.taille, local.donnees.length) / 2));
+    } finally {
+      local.enCours = false;
+    }
+    if (o === actif) afficherImages();
+    majEtat();
+  }
+
+  function reessayerImages() {
+    onglets.forEach(o => o.locales.forEach(x => { if (x.statut === 'erreur') televerser(o, x); }));
+  }
+  setInterval(() => { if (!document.hidden) reessayerImages(); }, 20000);
+
+  async function ajouterImages(blobs) {
+    const o = actif;
+    for (const blob of blobs) {
+      if (o.images.length + o.locales.length >= MAX_IMAGES) { annoncer(`${MAX_IMAGES} images au plus par onglet`); break; }
+      const local = { id: nouvelId(), statut: 'prep' };
+      o.locales.push(local);
+      if (o === actif) afficherImages();
+      try {
+        Object.assign(local, await preparerImage(blob));
+      } catch {
+        o.locales = o.locales.filter(x => x !== local);
+        if (o === actif) afficherImages();
+        annoncer('Image illisible');
+        continue;
+      }
+      imagesCompletes.set(local.id, local.donnees);
+      idb.ecrire(local.id, local.donnees);
+      televerser(o, local);
+    }
+  }
+
+  // Téléchargement des images complètes absentes de l'appareil
+  const enTelechargement = new Set();
+  async function telechargerImages(o) {
+    for (const im of o.images) {
+      if (imagesCompletes.has(im.id) || enTelechargement.has(im.id)) continue;
+      enTelechargement.add(im.id);
+      try {
+        let donnees = await idb.lire(im.id);
+        if (!donnees) {
+          const morceaux = await Promise.all(Array.from({ length: im.n }, (_, k) =>
+            fetch(`${urlMorceau(im.id, k)}?t=${Date.now()}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : Promise.reject(r.status))));
+          if (morceaux.some(m => typeof m !== 'string')) throw new Error('incomplet');
+          donnees = morceaux.join('');
+          if (!donnees.startsWith('data:image/')) throw new Error('invalide');
+          idb.ecrire(im.id, donnees);
+        }
+        imagesCompletes.set(im.id, donnees);
+      } catch {} finally {
+        enTelechargement.delete(im.id);
+      }
+    }
+  }
+
+  // Images de l'onglet prêtes à être copiées (dans l'ordre d'affichage)
+  const imagesPretes = o => [...o.images, ...o.locales].map(x => imagesCompletes.get(x.id)).filter(Boolean);
+
+  async function supprimerImage(o, id) {
+    const local = o.locales.find(x => x.id === id);
+    if (local) { local.supprimee = true; o.locales = o.locales.filter(x => x !== local); }
+    else await modifierIndex(o, liste => liste.filter(x => x.id !== id));
+    fetch(urlImage(id), { method: 'PUT', body: 'null' }).catch(() => {});
+    imagesCompletes.delete(id);
+    idb.effacer(id);
+    if (o === actif) afficherImages();
+  }
+
+  // Visionneuse
+  const visionneuse = document.getElementById('visionneuse'), grande = document.getElementById('grande');
+  let vue = null;
+  function ouvrirImage(o, id) {
+    const x = [...o.images, ...o.locales].find(y => y.id === id);
+    if (!x) return;
+    vue = { o, id };
+    grande.src = imagesCompletes.get(id) || x.mini;
+    visionneuse.hidden = false;
+    if (!imagesCompletes.has(id)) telechargerImages(o).then(() => { if (vue?.id === id && imagesCompletes.has(id)) grande.src = imagesCompletes.get(id); });
+  }
+  const fermerImage = () => { visionneuse.hidden = true; vue = null; grande.removeAttribute('src'); };
+  document.getElementById('v-fermer').onclick = fermerImage;
+  visionneuse.addEventListener('click', e => { if (e.target === visionneuse || e.target === grande) fermerImage(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !visionneuse.hidden) fermerImage(); });
+  document.getElementById('v-supprimer').onclick = async () => {
+    const { o, id } = vue;
+    fermerImage();
+    try { await supprimerImage(o, id); annoncer('Image supprimée'); } catch { annoncer('Suppression impossible (réseau)'); }
+  };
+  document.getElementById('v-copier').onclick = async () => {
+    const donnees = imagesCompletes.get(vue.id);
+    if (!donnees) { annoncer('Image en cours de téléchargement…'); return; }
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': enPng(donnees) })]);
+      annoncer('Image copiée ✓');
+    } catch { annoncer('Copie d\'image refusée par le navigateur'); }
+  };
+
+  // Images glissées ou collées dans la zone de texte
+  const imagesDuHtml = html => [...(html || '').matchAll(/<img[^>]+src=["'](data:image\/[^"']+)["']/gi)].map(m => m[1]);
+  note.addEventListener('paste', e => {
+    collageJusqua = maintenant() + 600;
+    const cd = e.clipboardData;
+    if (!cd) return;
+    const texte = cd.getData('text/plain');
+    const duHtml = imagesDuHtml(cd.getData('text/html'));
+    const fichiers = [...cd.files].filter(f => f.type.startsWith('image/'));
+    if (duHtml.length) Promise.all(duHtml.map(versBlob)).then(ajouterImages); // copié depuis cette appli : toutes les images
+    else if (fichiers.length) ajouterImages(fichiers);
+    if (!texte) { if (duHtml.length || fichiers.length) e.preventDefault(); return; }
+    const lignes = note.value.split('\n');
+    if (ressembleACode(texte) && !blocsDeCode(lignes).estCode[pointer(lignes, note.selectionStart)[0]]) {
+      e.preventDefault();
+      insererTexte(texte);
+    }
+  });
+  note.addEventListener('dragover', e => { if ([...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+  note.addEventListener('drop', e => {
+    const fichiers = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
+    if (!fichiers.length) return;
+    e.preventDefault();
+    ajouterImages(fichiers);
+  });
+
+  // ---- Boutons ----
+  // Les boutons ne doivent pas retirer le focus au texte (le clavier du téléphone reste ouvert)
+  document.querySelectorAll('nav button.format').forEach(b => b.addEventListener('mousedown', e => e.preventDefault()));
+
+  // • et 1. : mettent la ligne en liste ; sur une ligne déjà de ce type, ouvrent un sous-niveau
+  function boutonListe(type) {
+    const lignes = note.value.split('\n');
+    const [i0] = pointer(lignes, note.selectionStart);
+    let [i1, col1] = pointer(lignes, note.selectionEnd);
+    if (note.selectionEnd > note.selectionStart && col1 === 0 && i1 > i0) i1--;
+    const concernees = lignes.slice(i0, i1 + 1).filter((l, k) => i0 === i1 || l.trim());
+    const deja = concernees.every(l => { const it = analyser(l); return it && (type === 'puce' ? it.puce : !it.puce); });
+    if (deja) decaler(1); else mettreListe(type);
+  }
+  document.getElementById('puces').onclick = () => boutonListe('puce');
+  document.getElementById('numeros').onclick = () => boutonListe('numero');
+  document.getElementById('code').onclick = basculerCode;
+
+  // Texte copié : sans éléments de liste vides ni espaces en fin de ligne (le code est laissé tel quel)
+  function propre(texte) {
+    const lignes = texte.split('\n'), { estCode } = blocsDeCode(lignes);
+    return lignes.filter((l, i) => estCode[i] || !ITEM_VIDE.test(l))
+      .map((l, i) => l.replace(/[ \t]+$/, '')).join('\n').replace(/^\s*\n|\s+$/g, '');
+  }
+
+  async function copier(texte) {
+    try {
+      await navigator.clipboard.writeText(texte);
+    } catch {
+      const zone = document.createElement('textarea');
+      zone.value = texte;
+      document.body.append(zone);
+      zone.select();
+      document.execCommand('copy');
+      zone.remove();
+    }
+  }
+
+  // Version HTML du texte et des images (pour les applis qui acceptent le collage riche)
+  const versHtml = (texte, images) =>
+    `<div style="white-space:pre-wrap">${echapper(texte)}</div>` + images.map(d => `<p><img src="${d}"></p>`).join('');
+
+  const tactile = matchMedia('(pointer: coarse)').matches;
+  const peutPartagerFichiers = (() => {
+    try { return !!navigator.canShare?.({ files: [new File(['x'], 'x.png', { type: 'image/png' })] }); } catch { return false; }
+  })();
+
+  const fichiersDe = images => Promise.all(images.map(async (d, i) => {
+    const blob = await versBlob(d);
+    return new File([blob], `capture-${i + 1}.${blob.type.split('/')[1] || 'png'}`, { type: blob.type });
+  }));
+
+  // Les fichiers sont prêts avant le toucher sur « Partager » : Safari exige que le partage
+  // parte aussitôt après le geste
+  async function partager(texte, fichiers) {
+    try {
+      await navigator.share(texte ? { files: fichiers, text: texte } : { files: fichiers });
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+      try { await navigator.share({ files: fichiers }); } catch {}
+    }
+  }
+
+  // Copier : texte + images. Le presse-papiers reçoit le texte, une version riche (texte + toutes
+  // les images) et la 1re image. Sur téléphone, un partage permet d'envoyer toutes les images d'un coup.
+  document.getElementById('copier').onclick = async () => {
+    const o = actif, texte = propre(note.value), images = imagesPretes(o);
+    const attendues = o.images.length + o.locales.length;
+    if (!images.length) {
+      await copier(texte);
+      annoncer(attendues ? 'Images pas encore téléchargées : texte copié seul' : texte ? 'Copié ✓' : 'Note vide');
+      return;
+    }
+    let copie = 'texte + 1re image';
+    try {
+      const contenu = { 'text/html': new Blob([versHtml(texte, images)], { type: 'text/html' }), 'image/png': enPng(images[0]) };
+      if (texte) contenu['text/plain'] = new Blob([texte], { type: 'text/plain' });
+      await navigator.clipboard.write([new ClipboardItem(contenu)]);
+    } catch {
+      try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': enPng(images[0]) })]); copie = '1re image'; }
+      catch { await copier(texte); copie = 'texte seul'; }
+    }
+    if (tactile && peutPartagerFichiers) {
+      const fichiers = fichiersDe(images);
+      const r = await popup({
+        message: `Copié (${copie}). Pour envoyer ${images.length > 1 ? `les ${images.length} images` : 'l\'image'} et le texte à Claude d'un coup : Partager, puis choisir Claude.`,
+        boutons: [{ texte: 'Fermer', valeur: false }, { texte: 'Partager', classe: 'principal', valeur: true }],
+      });
+      if (r.valeur) partager(texte, await fichiers);
+    } else {
+      annoncer(`Copié : ${copie === 'texte + 1re image' ? `texte + ${images.length} image${images.length > 1 ? 's' : ''}` : copie}${images.length < attendues ? ' (images en cours de téléchargement)' : ''}`);
+    }
+  };
+
+  // Coller : texte au curseur (code entouré de ```), images ajoutées à l'onglet
+  document.getElementById('coller').onclick = async () => {
+    try {
+      const elements = await navigator.clipboard.read();
+      let texte = '', html = '';
+      const fichiers = [];
+      for (const el of elements) for (const type of el.types) {
+        if (type.startsWith('image/')) fichiers.push(await el.getType(type));
+        else if (type === 'text/plain') texte = await (await el.getType(type)).text();
+        else if (type === 'text/html') html = await (await el.getType(type)).text();
+      }
+      const duHtml = imagesDuHtml(html);
+      const images = duHtml.length ? await Promise.all(duHtml.map(versBlob)) : fichiers;
+      if (!texte && !images.length) { annoncer('Presse-papiers vide'); return; }
+      if (texte) insererTexte(texte);
+      if (images.length) ajouterImages(images);
+    } catch {
+      try {
+        const texte = await navigator.clipboard.readText();
+        if (texte) insererTexte(texte); else annoncer('Presse-papiers vide');
+      } catch { annoncer('Accès au presse-papiers refusé par le navigateur'); }
+    }
+  };
+
+  // Effacer : texte et images de l'onglet
+  document.getElementById('effacer').onclick = async () => {
+    const o = actif, n = o.images.length + o.locales.length;
+    if (!o.texte && !n) return;
+    const quoi = [o.texte && 'le texte', n && `${n} image${n > 1 ? 's' : ''}`].filter(Boolean).join(' et ');
+    const r = await popup({
+      message: `Effacer ${quoi} de « ${titre(o)} » sur tous les appareils ?`,
+      boutons: [{ texte: 'Annuler', valeur: false }, { texte: 'Effacer', classe: 'danger', valeur: true }],
+    });
+    if (!r.valeur) return;
+    if (o.texte) { definir(o, { texte: '' }); envoyer(o); }
+    if (n) {
+      const ids = [...o.images, ...o.locales].map(x => x.id);
+      o.locales = [];
+      try {
+        await modifierIndex(o, () => []);
+        ids.forEach(id => { fetch(urlImage(id), { method: 'PUT', body: 'null' }).catch(() => {}); imagesCompletes.delete(id); idb.effacer(id); });
+      } catch { annoncer('Images : suppression impossible (réseau)'); }
+      afficherImages();
+    }
+    annoncer('Effacé');
+  };
+
+  document.getElementById('lien').onclick = async () => {
+    const r = await popup({
+      message: 'Lien secret de ce bloc-notes, à ouvrir sur vos autres appareils. Toute personne qui l\'a peut lire et modifier les notes.',
+      valeurChamp: lienSecret(cle),
+      boutons: [{ texte: 'Fermer', valeur: false }, { texte: 'Copier le lien', classe: 'principal', valeur: true }],
+    });
+    if (!r.valeur) return;
+    await copier(lienSecret(cle));
+    annoncer('Lien copié ✓');
+  };
+
+  afficherNoms();
+  onglets.forEach(telechargerImages);
+  choisir(actif);
+  lireNoms();
+  onglets.forEach(o => { if (aEnvoyer(o)) envoyer(o); });
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+</script>
+</body>
+</html>

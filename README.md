@@ -57,3 +57,26 @@ autres appareils (ou à coller dans la fenêtre d'accueil). Sans la clé, imposs
 notes : les règles Firebase interdisent de lister la base.
 
 ⚠️ Toute personne qui possède le lien peut lire et modifier les notes : ne le partagez pas.
+
+## Page de test (`test.html`)
+
+Nouvelle version en essai sur <https://vian31.github.io/note/test.html>, avec le même lien secret.
+Ses notes, noms et images sont rangés à part (`t1…`, `tn1…`, `ti1…`, `images/`) : l'appli
+normale n'est pas touchée. Il faut publier les règles de `database.rules.json` (elles gardent
+celles de l'appli normale).
+
+- **Barre unique** : `•` `1.` `</>` Effacer Copier Coller (🔗 et le point d'état passent en haut).
+  `•` / `1.` sur une ligne déjà en liste ouvrent un sous-niveau ; Retour arrière juste après
+  la puce remonte d'un niveau (ou retire la puce).
+- **Images** : Ctrl+V d'une capture (Win+Maj+S), glisser-déposer ou bouton Coller. Réduites à
+  1568 px, en WebP (~50–120 Ko), découpées en morceaux de texte dans Firebase (même domaine, même
+  format que les notes : passe les proxys) ; si un envoi échoue, les morceaux sont réduits de
+  moitié au nouvel essai. Vignettes synchronisées ; toucher une vignette : agrandir, copier
+  l'image, supprimer.
+- **Copier** : texte + images. Le presse-papiers reçoit le texte, une version riche (texte + toutes
+  les images) et la 1re image en PNG. Sur téléphone, une fenêtre propose aussi de **Partager**
+  texte et images d'un coup vers l'appli Claude.
+- **Coller** : texte au curseur, images ajoutées à l'onglet.
+- **Code** : bouton `</>` (balises ``` autour de la sélection ou de la ligne ; dans un bloc, les
+  retire) et détection automatique au collage. Bandeau coloré derrière les blocs ; pas de puces
+  automatiques ni de renumérotation dans le code ; Tab y insère 2 espaces.
