@@ -20,7 +20,7 @@
     color-scheme: light;
     --fond: #fff; --texte: #111; --bord: #e5e5e5; --bouton: #e8ecf2; --bord-bouton: #c3ccd8; --appui: #d5dce6; --voile: rgba(0,0,0,.35);
     --accent: #2563c9; --sur-accent: #fff;
-    --code: #f3f5f8; --code-cloture: #e7ebf1; --code-bord: #8a9bb5;
+    --code: #f3f5f8; --code-cloture: #e7ebf1; --code-bord: #8a9bb5; --code-texte: #0b6584; --code-balise: #8792a5;
   }
   /* Thème : automatique (réglage du téléphone / PC), ou forcé dans ⚙ Réglages */
   @media (prefers-color-scheme: dark) {
@@ -28,14 +28,14 @@
       color-scheme: dark;
       --fond: #111; --texte: #eee; --bord: #333; --bouton: #2a313c; --bord-bouton: #46505f; --appui: #3a4351; --voile: rgba(0,0,0,.6);
       --accent: #4b8bf0; --sur-accent: #fff;
-      --code: #1b2029; --code-cloture: #232a35; --code-bord: #5d7091;
+      --code: #1b2029; --code-cloture: #232a35; --code-bord: #5d7091; --code-texte: #7cc7e6; --code-balise: #6c778a;
     }
   }
   :root[data-theme="sombre"] {
     color-scheme: dark;
     --fond: #111; --texte: #eee; --bord: #333; --bouton: #2a313c; --bord-bouton: #46505f; --appui: #3a4351; --voile: rgba(0,0,0,.6);
     --accent: #4b8bf0; --sur-accent: #fff;
-    --code: #1b2029; --code-cloture: #232a35; --code-bord: #5d7091;
+    --code: #1b2029; --code-cloture: #232a35; --code-bord: #5d7091; --code-texte: #7cc7e6; --code-balise: #6c778a;
   }
   html, body { margin: 0; height: 100%; overflow: hidden; background: var(--fond); color: var(--texte); }
   body { display: flex; flex-direction: column; font: 18px/1.5 system-ui, sans-serif; }
@@ -59,7 +59,13 @@
     overflow-x: hidden; overflow-y: scroll;
   }
   #zone textarea { outline: 0; resize: none; background: transparent; color: inherit; }
-  #miroir { color: transparent; pointer-events: none; user-select: none; }
+  #miroir { color: var(--texte); pointer-events: none; user-select: none; }
+  /* Quand la note contient du code, c'est le miroir qui affiche le texte (code en couleur) ;
+     la zone de texte, au-dessus, ne garde que le curseur et la sélection */
+  #zone.avec-code textarea { color: transparent; caret-color: var(--texte); }
+  #zone.avec-code textarea::selection { color: transparent; background: rgba(37, 99, 201, .3); }
+  #miroir .code { color: var(--code-texte); }
+  #miroir .cloture { color: var(--code-balise); }
   #miroir .code, #miroir .cloture {
     margin: 0 -16px; padding: 0 16px 0 13px; border-left: 3px solid var(--code-bord); background: var(--code);
   }
@@ -663,8 +669,8 @@
     interne = true;
     note.focus();
     note.setSelectionRange(debut, fin);
-    let ok = true;
-    if (texte) ok = document.execCommand('insertText', false, texte);
+    let ok = texte.length <= 20000; // au-delà, insertion directe : rapide, mais sans annulation (Ctrl+Z)
+    if (texte && ok) ok = document.execCommand('insertText', false, texte);
     else if (debut < fin) ok = document.execCommand('delete');
     if (!ok) {
       note.setRangeText(texte, debut, fin, 'end');
@@ -912,16 +918,30 @@
 
   // Le miroir reproduit le texte ligne par ligne (même police, même largeur, texte invisible)
   // pour peindre le fond des blocs de code derrière la zone de texte.
-  const miroir = document.getElementById('miroir');
+  const miroir = document.getElementById('miroir'), zone = document.getElementById('zone');
+  let miroirLignes = [], miroirClasses = []; // contenu actuellement dessiné dans le miroir
   const echapper = t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   function dessinerMiroir() {
-    const v = note.value;
-    if (!v.includes('```')) { if (miroir.firstChild) miroir.replaceChildren(); return; }
+    const v = note.value, avecCode = v.includes('```');
+    zone.classList.toggle('avec-code', avecCode);
+    if (!avecCode) { if (miroir.firstChild) miroir.replaceChildren(); miroirLignes = miroirClasses = []; return; }
     const lignes = v.split('\n'), { estCode } = blocsDeCode(lignes);
-    miroir.innerHTML = lignes.map((l, i) => {
-      const classe = estCode[i] ? (CLOTURE.test(l) ? ' class="cloture"' : ' class="code"') : '';
-      return `<div${classe}>${l ? echapper(l) : '<br>'}</div>`;
-    }).join('');
+    const classes = lignes.map((l, i) => estCode[i] ? (CLOTURE.test(l) ? 'cloture' : 'code') : '');
+    // seules les lignes qui ont changé (texte ou type) sont redessinées : rapide même sur une longue note
+    const memes = (i, j) => lignes[i] === miroirLignes[j] && classes[i] === miroirClasses[j];
+    let d = 0;
+    while (d < lignes.length && d < miroirLignes.length && memes(d, d)) d++;
+    let f = 0;
+    while (f < lignes.length - d && f < miroirLignes.length - d && memes(lignes.length - 1 - f, miroirLignes.length - 1 - f)) f++;
+    for (let k = miroirLignes.length - f - 1; k >= d; k--) miroir.children[k].remove();
+    const html = lignes.slice(d, lignes.length - f).map((l, k) =>
+      `<div${classes[d + k] ? ` class="${classes[d + k]}"` : ''}>${l ? echapper(l) : '<br>'}</div>`).join('');
+    if (html) {
+      const suivant = miroir.children[d];
+      if (suivant) suivant.insertAdjacentHTML('beforebegin', html); else miroir.insertAdjacentHTML('beforeend', html);
+    }
+    miroirLignes = lignes;
+    miroirClasses = classes;
     miroir.scrollTop = note.scrollTop;
   }
   note.addEventListener('scroll', () => { miroir.scrollTop = note.scrollTop; });
@@ -1275,10 +1295,25 @@
     else if (fichiers.length) ajouterImages(fichiers);
     if (!texte) { if (duHtml.length || fichiers.length) e.preventDefault(); return; }
     const lignes = note.value.split('\n');
-    if (ressembleACode(texte) && !blocsDeCode(lignes).estCode[pointer(lignes, note.selectionStart)[0]]) {
-      e.preventDefault();
-      insererTexte(texte);
-    }
+    if (ressembleACode(texte) && !blocsDeCode(lignes).estCode[pointer(lignes, note.selectionStart)[0]])
+      aEnvelopper = { debut: note.selectionStart }; // les ``` seront ajoutés juste après le collage
+  });
+
+  // Après un collage de code : ``` avant et après le texte collé (deux petites insertions, rapides et annulables)
+  let aEnvelopper = null;
+  note.addEventListener('input', e => {
+    if (!aEnvelopper || interne) return;
+    const { debut } = aEnvelopper;
+    aEnvelopper = null;
+    if (e.inputType !== 'insertFromPaste') return;
+    const v = note.value, fin = note.selectionStart;
+    let p = fin;
+    while (p > debut && v[p - 1] === '\n') p--; // la clôture se place après la dernière ligne de code
+    remplacer(p, p, p === fin && fin < v.length && v[fin] !== '\n' ? '\n```\n' : '\n```');
+    remplacer(debut, debut, (debut > 0 && v[debut - 1] !== '\n' ? '\n' : '') + '```\n');
+    const apres = note.value.indexOf('```', p + 5) + 3;
+    note.setSelectionRange(apres, apres);
+    annoncer('Code détecté : entouré de ``` (bouton </> pour retirer)');
   });
   note.addEventListener('dragover', e => { if ([...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
   note.addEventListener('drop', e => {
