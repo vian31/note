@@ -1,5 +1,5 @@
-const CACHE = 'note-v17';
-const FICHIERS = ['./', 'index.html', 'config.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
+const CACHE = 'note-v18';
+const FICHIERS = ['./', 'index.html', 'config.js', 'lib/codemirror.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FICHIERS)));

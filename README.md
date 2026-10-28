@@ -1,11 +1,41 @@
 # Note
 
-Bloc-note ultra simple synchronisé entre appareils (façon Framapad), en PWA.
-Trois onglets renommables (toucher l'onglet affiché), un bouton **Effacer**, un bouton **Copier**. Aucune authentification.
+Bloc-notes synchronisé entre appareils (façon Framapad), en PWA, pensé pour préparer des prompts
+sur un PC et les coller dans Claude sur le téléphone (ou l'inverse) : texte, listes, code et
+captures d'écran. Aucune authentification : un lien secret donne accès au bloc-notes.
+
+<https://vian31.github.io/note/> — « Ajouter à l'écran d'accueil » pour l'installer.
 
 GitHub Pages ne sert que des fichiers statiques : la synchronisation passe par une
-**Firebase Realtime Database** (gratuite), interrogée directement en REST + flux temps réel,
-sans SDK.
+**Firebase Realtime Database** (gratuite), interrogée directement en REST, sans SDK.
+
+## Utilisation
+
+- **Onglets** : trois notes ; toucher l'onglet affiché pour le renommer.
+- **Barre** : `•` `1.` `</>` `🖼` Effacer Copier Coller ; ⚙ réglages et point d'état en haut.
+  Sur PC, colonne centrée, mise en forme à gauche et actions à droite.
+- **Listes** : `- ` et `1. ` (texte brut Markdown, que Claude comprend). Deux niveaux au plus :
+  1er appui sur `1.` → `1.`, 2e → `a)`, 3e → plus de liste (idem `•` → `-`, `•`, rien).
+  Entrée continue la liste (numéro suivant) ; Entrée sur un élément vide en sort ; Tab / Maj+Tab
+  décalent ; Retour arrière juste après la puce remonte d'un niveau. Insérer ou décaler un élément
+  renumérote les suivants. Les lignes commençant par `* `, `+ `, `• `, `– `, `1) `, `a) ` sont
+  aussi reconnues.
+- **Code** : bouton `</>` (balises ``` autour de la sélection ou de la ligne ; dans un bloc, les
+  retire) et détection automatique au collage. Affiché plus petit, en police à chasse fixe et en
+  couleur ; pas de listes automatiques dans le code ; Tab insère 2 espaces, Entrée garde le retrait.
+- **Images** : Ctrl+V d'une capture (Win+Maj+S), glisser-déposer, Coller, ou 🖼 (galerie /
+  appareil photo). Vignettes synchronisées ; toucher une vignette : agrandir, copier, supprimer.
+- **Copier** : texte nettoyé (sans éléments de liste vides ni espaces en fin de ligne ; le code est
+  laissé tel quel). Avec des images, en plusieurs fois, car Claude ne prend qu'un contenu à la fois
+  dans le presse-papiers : le texte, puis le bouton devient `🖼 1/2`, `🖼 2/2`… et chaque appui
+  copie l'image suivante. Sur téléphone, **Partager tout** envoie texte et images d'un coup.
+- **Coller** : texte au curseur, images ajoutées à l'onglet.
+- **Effacer** : texte et images de l'onglet, sur tous les appareils.
+- **Réglages ⚙** : thème (auto, clair, sombre), lien secret, **Supprimer les images** (toutes,
+  texte conservé), **Tout effacer** (notes, noms et images du bloc-notes).
+
+Un texte collé n'est jamais interprété (les lignes `* `, `- `, `1.` d'un code collé restent
+intactes), y compris avec les claviers qui envoient un collage ligne par ligne.
 
 ## Mise en route (une seule fois)
 
@@ -16,75 +46,37 @@ sans SDK.
    dans `config.js`.
 5. Sur GitHub : **Settings › Pages › Deploy from a branch** → branche `main`, dossier `/ (root)`.
 
-L'appli est alors sur <https://vian31.github.io/note/> ; « Ajouter à l'écran d'accueil » pour l'installer.
+## Lien secret
 
-## Puces et numérotation
+Au premier lancement, l'appli propose de créer un bloc-notes : une clé aléatoire est générée
+et placée dans l'adresse (`…/note/#clé`). ⚙ Réglages affiche ce lien, à ouvrir sur les autres
+appareils (ou à coller dans la fenêtre d'accueil). Sans la clé, impossible de lire les notes :
+les règles Firebase interdisent de lister la base.
 
-Détection automatique : une ligne qui commence par `- `, `* `, `+ `, `• `, `– `, `1. `, `1) ` ou `a) `
-est reconnue comme élément de liste, et Entrée ouvre l'élément suivant (même repli sur les claviers de
-téléphone qui n'autorisent pas l'interception de la touche Entrée).
-
-Un retrait ouvre un sous-niveau d'un autre type (chapitres) : `1.` → `a)` → `1)` pour les numéros,
-`-` → `•` → `◦` pour les puces. En remontant d'un niveau, la numérotation reprend à la suite
-(`1.`, `a)`, `b)`, puis `2.`). Insérer ou décaler un élément renumérote les suivants.
-
-Le texte collé n'est jamais interprété : un collage, ou un clavier qui envoie le texte ligne par ligne,
-laisse le code intact (les lignes `* `, `- `, `1.` d'un commentaire ou d'un YAML ne sont pas transformées).
-La liste n'est continuée que 0,15 s après un Entrée tapé à la main, si rien d'autre n'a été saisi entre-temps.
-
-Boutons **• Puces**, **1. Liste**, **⇥ ⇤** (décaler). Au clavier : Entrée continue la liste (numéro suivant),
-Entrée sur un élément vide en sort, Tab / Maj+Tab décalent. C'est du texte brut en syntaxe Markdown
-(`- ` et `1. `, retrait de 2 espaces) : il se colle tel quel dans un prompt Claude. **Copier** retire en plus
-les éléments de liste vides et les espaces en fin de ligne.
+⚠️ Toute personne qui possède le lien peut lire et modifier les notes : ne le partagez pas.
 
 ## Synchronisation
 
-- Flux en direct Firebase pour l'onglet affiché, plus une lecture toutes les 2 s
-  (certains proxys d'entreprise retiennent le flux).
-- Les événements du flux ne servent que de signal : le contenu est toujours relu auprès du serveur
-  (un écho en retard ne peut plus être pris pour une modification d'un autre appareil).
-  Les relectures utilisent `If-None-Match` : réponse « 304 inchangé » sans retélécharger le texte.
+- Flux en direct Firebase pour l'onglet affiché, plus une lecture toutes les 2 s (certains proxys
+  d'entreprise retiennent le flux). Les événements du flux ne servent que de signal : le contenu
+  est toujours relu auprès du serveur. Les relectures utilisent `If-None-Match` (« 304 inchangé »).
 - Envois conditionnels (ETag) : un appareil ne peut pas écraser une version qu'il n'a pas vue.
   En cas d'écritures simultanées, les modifications sont fusionnées si elles touchent des
   endroits différents ; sinon la version locale l'emporte.
 - Le texte non envoyé est conservé sur l'appareil (hors ligne, fermeture) et envoyé dès que possible.
+- Images : réduites à 1568 px en WebP (~50–120 Ko), découpées en morceaux de texte dans Firebase
+  (même domaine et même format que les notes : passe les proxys) ; après un échec, morceaux
+  deux fois plus petits. Un petit index par onglet (avec vignettes) est synchronisé ; les images
+  complètes sont téléchargées une fois puis gardées sur l'appareil.
 
-## Lien secret
+## Technique
 
-Au premier lancement, l'appli propose de créer un bloc-notes : une clé aléatoire est générée
-et placée dans l'adresse (`…/note/#clé`). Le bouton 🔗 affiche ce lien, à ouvrir sur les
-autres appareils (ou à coller dans la fenêtre d'accueil). Sans la clé, impossible de lire les
-notes : les règles Firebase interdisent de lister la base.
-
-⚠️ Toute personne qui possède le lien peut lire et modifier les notes : ne le partagez pas.
-
-## Page de test (`test.html`)
-
-Nouvelle version en essai sur <https://vian31.github.io/note/test.html>, avec le même lien secret.
-Ses notes, noms et images sont rangés à part (`t1…`, `tn1…`, `ti1…`, `images/`) : l'appli
-normale n'est pas touchée. Il faut publier les règles de `database.rules.json` (elles gardent
-celles de l'appli normale).
-
-- **Barre unique** : `•` `1.` `</>` `🖼` Effacer Copier Coller (⚙ réglages et point d'état en haut).
-  Deux niveaux au plus : 1er appui sur `1.` → `1.`, 2e → `a)`, 3e → plus de liste (idem `•` → `-`,
-  `•`, rien). Tab ne crée pas de 3e niveau. Retour arrière juste après la puce remonte d'un niveau.
-- **Images** : Ctrl+V d'une capture (Win+Maj+S), glisser-déposer, bouton Coller, ou bouton 🖼
-  (galerie / appareil photo : sur téléphone, les captures ne passent pas par le presse-papiers). Réduites à
-  1568 px, en WebP (~50–120 Ko), découpées en morceaux de texte dans Firebase (même domaine, même
-  format que les notes : passe les proxys) ; si un envoi échoue, les morceaux sont réduits de
-  moitié au nouvel essai. Vignettes synchronisées ; toucher une vignette : agrandir, copier
-  l'image, supprimer.
-- **Copier** : en plusieurs fois quand il y a des images (Claude ne prend qu'un contenu à la fois
-  dans le presse-papiers) : le texte, puis le bouton devient `🖼 1/2`, `🖼 2/2`… et chaque appui
-  copie l'image suivante. Sur téléphone, **Partager tout** envoie texte et images d'un coup.
-- **Coller** : texte au curseur, images ajoutées à l'onglet.
-- **Code** : bouton `</>` (balises ``` autour de la sélection ou de la ligne ; dans un bloc, les
-  retire) et détection automatique au collage. Le code s'affiche plus petit, en police à chasse
-  fixe et en couleur, sur un bandeau ; pas de puces automatiques ni de renumérotation dans le code ;
-  Tab y insère 2 espaces, Entrée garde le retrait.
-- **Éditeur** : [CodeMirror 6](https://codemirror.net) (licence MIT), empaqueté dans
-  `lib/codemirror.js` et servi par le même site (rien à autoriser sur un proxy). Annulation propre
-  (Ctrl+Z ne défait jamais une modification venue d'un autre appareil), historique par onglet.
-- **Réglages ⚙** : thème (auto, clair, sombre), lien secret, **Supprimer les images** (toutes celles du bloc-notes, texte conservé)
-  et **Tout effacer** (notes, noms et images du bloc-notes, appli normale comprise). Les règles
-  n'autorisent sur un bloc-notes entier que sa suppression.
+- **Éditeur** : [CodeMirror 6](https://codemirror.net) (licence MIT, voir
+  `lib/LICENSE-codemirror.txt`), empaqueté dans `lib/codemirror.js` et servi par le même site
+  (rien à autoriser sur un proxy). Ctrl+Z ne défait jamais une modification venue d'un autre
+  appareil ; historique par onglet.
+- **Règles Firebase** (`database.rules.json`) : notes `notes/<clé>/{1,2,3}`, noms `n1…`, index
+  d'images `i1…` ; images `images/<clé>/<id>/<morceau>`. Sur un bloc-notes entier, seule la
+  suppression est autorisée.
+- **Page de test** : <https://vian31.github.io/note/test.html>, même code avec ses données rangées
+  à part (`t1…`, `tn1…`, `ti1…`), pour essayer une nouveauté sans toucher aux vraies notes.
