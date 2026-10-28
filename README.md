@@ -65,10 +65,11 @@ Ses notes, noms et images sont rangés à part (`t1…`, `tn1…`, `ti1…`, `im
 normale n'est pas touchée. Il faut publier les règles de `database.rules.json` (elles gardent
 celles de l'appli normale).
 
-- **Barre unique** : `•` `1.` `</>` Effacer Copier Coller (🔗 et le point d'état passent en haut).
+- **Barre unique** : `•` `1.` `</>` `🖼` Effacer Copier Coller (⚙ réglages et point d'état en haut).
   `•` / `1.` sur une ligne déjà en liste ouvrent un sous-niveau ; Retour arrière juste après
   la puce remonte d'un niveau (ou retire la puce).
-- **Images** : Ctrl+V d'une capture (Win+Maj+S), glisser-déposer ou bouton Coller. Réduites à
+- **Images** : Ctrl+V d'une capture (Win+Maj+S), glisser-déposer, bouton Coller, ou bouton 🖼
+  (galerie / appareil photo : sur téléphone, les captures ne passent pas par le presse-papiers). Réduites à
   1568 px, en WebP (~50–120 Ko), découpées en morceaux de texte dans Firebase (même domaine, même
   format que les notes : passe les proxys) ; si un envoi échoue, les morceaux sont réduits de
   moitié au nouvel essai. Vignettes synchronisées ; toucher une vignette : agrandir, copier
@@ -80,3 +81,6 @@ celles de l'appli normale).
 - **Code** : bouton `</>` (balises ``` autour de la sélection ou de la ligne ; dans un bloc, les
   retire) et détection automatique au collage. Bandeau coloré derrière les blocs ; pas de puces
   automatiques ni de renumérotation dans le code ; Tab y insère 2 espaces.
+- **Réglages ⚙** : lien secret, **Supprimer les images** (toutes celles du bloc-notes, texte conservé)
+  et **Tout effacer** (notes, noms et images du bloc-notes, appli normale comprise). Les règles
+  n'autorisent sur un bloc-notes entier que sa suppression.

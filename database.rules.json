@@ -2,6 +2,7 @@
   "rules": {
     "notes": {
       "$cle": {
+        ".write": "$cle.length >= 22 && !newData.exists()",
         "$onglet": {
           ".read": "$cle.length >= 22 && ($onglet == '1' || $onglet == '2' || $onglet == '3' || $onglet == 'n1' || $onglet == 'n2' || $onglet == 'n3' || $onglet == 'i1' || $onglet == 'i2' || $onglet == 'i3' || $onglet == 't1' || $onglet == 't2' || $onglet == 't3' || $onglet == 'tn1' || $onglet == 'tn2' || $onglet == 'tn3' || $onglet == 'ti1' || $onglet == 'ti2' || $onglet == 'ti3')",
           ".write": "$cle.length >= 22 && ($onglet == '1' || $onglet == '2' || $onglet == '3' || $onglet == 'n1' || $onglet == 'n2' || $onglet == 'n3' || $onglet == 'i1' || $onglet == 'i2' || $onglet == 'i3' || $onglet == 't1' || $onglet == 't2' || $onglet == 't3' || $onglet == 'tn1' || $onglet == 'tn2' || $onglet == 'tn3' || $onglet == 'ti1' || $onglet == 'ti2' || $onglet == 'ti3')",
@@ -11,6 +12,7 @@
     },
     "images": {
       "$cle": {
+        ".write": "$cle.length >= 22 && !newData.exists()",
         "$id": {
           ".read": "$cle.length >= 22 && $id.length <= 40",
           ".write": "$cle.length >= 22 && $id.length <= 40",

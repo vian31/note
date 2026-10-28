@@ -13,12 +13,14 @@
 <style>
   * { box-sizing: border-box; }
   :root {
-    --fond: #fff; --texte: #111; --bord: #e5e5e5; --bouton: #fff; --appui: #f2f2f2; --voile: rgba(0,0,0,.35);
+    --fond: #fff; --texte: #111; --bord: #e5e5e5; --bouton: #e8ecf2; --bord-bouton: #c3ccd8; --appui: #d5dce6; --voile: rgba(0,0,0,.35);
+    --accent: #2563c9; --sur-accent: #fff;
     --code: #f3f5f8; --code-cloture: #e7ebf1; --code-bord: #8a9bb5;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --fond: #111; --texte: #eee; --bord: #333; --bouton: #1c1c1c; --appui: #2a2a2a; --voile: rgba(0,0,0,.6);
+      --fond: #111; --texte: #eee; --bord: #333; --bouton: #2a313c; --bord-bouton: #46505f; --appui: #3a4351; --voile: rgba(0,0,0,.6);
+      --accent: #4b8bf0; --sur-accent: #fff;
       --code: #1b2029; --code-cloture: #232a35; --code-bord: #5d7091;
     }
   }
@@ -28,13 +30,13 @@
     display: flex; align-items: center; gap: 4px; padding: max(8px, env(safe-area-inset-top)) 12px 0 16px;
     border-bottom: 1px solid var(--bord);
   }
-  #onglets button {
+  #onglets [role="tab"] {
     flex: 1; min-width: 0; border: 0; border-radius: 0; background: none; padding: 8px 4px;
     border-bottom: 2px solid transparent; opacity: .5;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  #onglets button[aria-selected="true"] { border-bottom-color: currentColor; opacity: 1; font-weight: 600; }
-  #onglets #lien { flex: none; border: 0; padding: 4px 6px; opacity: .8; font-size: 16px; }
+  #onglets [role="tab"][aria-selected="true"] { border-bottom-color: currentColor; opacity: 1; font-weight: 600; }
+  #onglets #reglages { flex: none; border: 0; background: none; padding: 4px 6px; font-size: 18px; }
   /* Zone de saisie : le « miroir » derrière la zone de texte dessine le fond des blocs de code */
   #zone { position: relative; flex: 1; min-height: 0; }
   #zone textarea, #miroir {
@@ -74,11 +76,23 @@
     align-items: center; border-top: 1px solid var(--bord); font-size: 16px;
   }
   nav button { flex: 1 1 auto; min-width: 0; }
-  nav .format:not(#coller) { flex: 0 1 auto; min-width: 38px; }
+  nav .format:not(#coller) { flex: 0 1 auto; min-width: 36px; }
+  /* petits écrans : barre resserrée pour que les 7 boutons et leurs libellés tiennent */
+  @media (max-width: 400px) {
+    nav { gap: 4px; padding-left: 6px; padding-right: 6px; font-size: 15px; }
+    nav button { padding: 7px 5px; }
+    nav .format:not(#coller) { min-width: 30px; }
+  }
+  @media (max-width: 340px) {
+    nav { gap: 3px; padding-left: 4px; padding-right: 4px; font-size: 13px; }
+    nav button { padding: 6px 4px; }
+    nav .format:not(#coller) { min-width: 26px; }
+  }
   button {
-    font: inherit; padding: 8px 10px; border: 1px solid var(--bord); border-radius: 8px;
+    font: inherit; padding: 8px 10px; border: 1px solid var(--bord-bouton); border-radius: 8px;
     background: var(--bouton); color: inherit; cursor: pointer;
   }
+  #copier { background: var(--accent); border-color: var(--accent); color: var(--sur-accent); font-weight: 600; }
   nav button { padding: 7px 8px; white-space: nowrap; }
   button:active { background: var(--appui); }
 
@@ -130,7 +144,7 @@
   <button role="tab">1</button>
   <button role="tab">2</button>
   <button role="tab">3</button>
-  <button id="lien" title="Lien secret de ce bloc-notes" aria-label="Lien secret">🔗</button>
+  <button id="reglages" title="Réglages : lien secret, nettoyage" aria-label="Réglages">⚙</button>
   <span id="etat" title="Synchronisation"></span>
 </div>
 <div id="zone">
@@ -142,6 +156,8 @@
   <button id="puces" class="format" title="Liste à puces (encore : sous-niveau)" aria-label="Liste à puces">•</button>
   <button id="numeros" class="format" title="Liste numérotée (encore : sous-niveau)" aria-label="Liste numérotée">1.</button>
   <button id="code" class="format" title="Bloc de code" aria-label="Bloc de code">&lt;/&gt;</button>
+  <button id="image" class="format" title="Insérer une image (galerie, appareil photo)" aria-label="Insérer une image">🖼</button>
+  <input id="fichier" type="file" accept="image/*" multiple hidden>
   <button id="effacer">Effacer</button>
   <button id="copier">Copier</button>
   <button id="coller" class="format">Coller</button>
@@ -1271,6 +1287,16 @@
   document.getElementById('numeros').onclick = () => boutonListe('numero');
   document.getElementById('code').onclick = basculerCode;
 
+  // 🖼 : choisir des images dans la galerie (ou prendre une photo) — sur téléphone, les captures
+  // d'écran ne passent pas par le presse-papiers
+  const choixFichier = document.getElementById('fichier');
+  document.getElementById('image').onclick = () => choixFichier.click();
+  choixFichier.onchange = () => {
+    const fichiers = [...choixFichier.files].filter(f => f.type.startsWith('image/') || !f.type);
+    choixFichier.value = '';
+    if (fichiers.length) ajouterImages(fichiers);
+  };
+
   // Texte copié : sans éléments de liste vides ni espaces en fin de ligne (le code est laissé tel quel)
   function propre(texte) {
     const lignes = texte.split('\n'), { estCode } = blocsDeCode(lignes);
@@ -1394,15 +1420,68 @@
     annoncer('Effacé');
   };
 
-  document.getElementById('lien').onclick = async () => {
+  // ---- Réglages : lien secret et nettoyage de la base ----
+  const supprimer = url => fetch(url, { method: 'PUT', body: 'null' }).then(r => { if (!r.ok) throw new Error(r.status); });
+  const INDEX_TOUS = ['i1', 'i2', 'i3', 'ti1', 'ti2', 'ti3']; // appli normale et page de test
+
+  function oublierImagesLocales() {
+    imagesCompletes.clear();
+    onglets.forEach(o => {
+      o.locales.forEach(x => { x.supprimee = true; });
+      o.locales = [];
+      enregistrerIndex(o, [], null);
+    });
+    try { indexedDB.deleteDatabase('note-images'); } catch {}
+  }
+
+  // Toutes les images de ce bloc-notes (les deux espaces), y compris celles qu'aucun index ne cite plus
+  async function viderImages() {
+    await supprimer(`${base}/images/${cle}.json`);
+    await Promise.all(INDEX_TOUS.map(n => supprimer(`${base}/notes/${cle}/${n}.json`)));
+    oublierImagesLocales();
+  }
+
+  // Tout ce bloc-notes : notes, noms et images, de l'appli normale et de la page de test
+  async function toutEffacer() {
+    await supprimer(`${base}/images/${cle}.json`);
+    await supprimer(`${base}/notes/${cle}.json`);
+    oublierImagesLocales();
+    onglets.forEach(o => {
+      clearTimeout(o.minuteur);
+      o.etag = null;
+      oublierPeutEtre(o);
+      definir(o, { texte: '', depart: '' });
+      definirNom(o, '', false);
+    });
+  }
+
+  document.getElementById('reglages').onclick = async () => {
     const r = await popup({
       message: 'Lien secret de ce bloc-notes, à ouvrir sur vos autres appareils. Toute personne qui l\'a peut lire et modifier les notes.',
       valeurChamp: lienSecret(cle),
-      boutons: [{ texte: 'Fermer', valeur: false }, { texte: 'Copier le lien', classe: 'principal', valeur: true }],
+      boutons: [
+        { texte: 'Supprimer les images', classe: 'danger', valeur: 'images' },
+        { texte: 'Tout effacer', classe: 'danger', valeur: 'tout' },
+        { texte: 'Fermer', valeur: false },
+        { texte: 'Copier le lien', classe: 'principal', valeur: 'lien' },
+      ],
     });
-    if (!r.valeur) return;
-    await copier(lienSecret(cle));
-    annoncer('Lien copié ✓');
+    if (r.valeur === 'lien') { await copier(lienSecret(cle)); annoncer('Lien copié ✓'); return; }
+    if (r.valeur !== 'images' && r.valeur !== 'tout') return;
+    const tout = r.valeur === 'tout';
+    const ok = await popup({
+      message: tout
+        ? 'Tout effacer ? Les notes, les noms d\'onglets et les images de ce bloc-notes seront supprimés de la base, sur tous les appareils (appli normale comprise). C\'est définitif.'
+        : 'Supprimer toutes les images de ce bloc-notes, sur tous les appareils (appli normale comprise) ? Le texte des notes est conservé.',
+      boutons: [{ texte: 'Annuler', valeur: false }, { texte: tout ? 'Tout effacer' : 'Supprimer', classe: 'danger', valeur: true }],
+    });
+    if (!ok.valeur) return;
+    try {
+      await (tout ? toutEffacer() : viderImages());
+      annoncer(tout ? 'Base vidée' : 'Images supprimées');
+    } catch {
+      annoncer('Échec : réseau, ou règles Firebase pas encore mises à jour');
+    }
   };
 
   afficherNoms();
