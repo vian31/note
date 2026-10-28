@@ -50,26 +50,20 @@
   }
   #onglets [role="tab"][aria-selected="true"] { border-bottom-color: currentColor; opacity: 1; font-weight: 600; }
   #onglets #reglages { flex: none; border: 0; background: none; padding: 4px 6px; font-size: 18px; }
-  /* Zone de saisie : le « miroir » derrière la zone de texte dessine le fond des blocs de code */
+  /* Zone de saisie : éditeur CodeMirror (le code s'y affiche plus petit, en police à chasse fixe) */
   #zone { position: relative; flex: 1; min-height: 0; }
-  #zone textarea, #miroir {
-    position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 16px; border: 0;
-    font: inherit; line-height: inherit; letter-spacing: normal; tab-size: 8; font-variant-ligatures: none;
-    white-space: pre-wrap; overflow-wrap: break-word; word-break: normal;
-    overflow-x: hidden; overflow-y: scroll;
+  #zone .cm-editor { height: 100%; color: var(--texte); background: transparent; }
+  #zone .cm-editor.cm-focused { outline: none; }
+  #zone .cm-scroller { font: inherit; line-height: 1.5; font-variant-ligatures: none; }
+  #zone .cm-content { padding: 16px 0; caret-color: var(--texte); }
+  #zone .cm-line { padding: 0 16px; }
+  #zone .cm-code, #zone .cm-cloture {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+    font-size: .74em; line-height: 1.6; padding-left: 13px; border-left: 3px solid var(--code-bord);
+    background: var(--code); color: var(--code-texte);
   }
-  #zone textarea { outline: 0; resize: none; background: transparent; color: inherit; }
-  #miroir { color: var(--texte); pointer-events: none; user-select: none; }
-  /* Quand la note contient du code, c'est le miroir qui affiche le texte (code en couleur) ;
-     la zone de texte, au-dessus, ne garde que le curseur et la sélection */
-  #zone.avec-code textarea { color: transparent; caret-color: var(--texte); }
-  #zone.avec-code textarea::selection { color: transparent; background: rgba(37, 99, 201, .3); }
-  #miroir .code { color: var(--code-texte); }
-  #miroir .cloture { color: var(--code-balise); }
-  #miroir .code, #miroir .cloture {
-    margin: 0 -16px; padding: 0 16px 0 13px; border-left: 3px solid var(--code-bord); background: var(--code);
-  }
-  #miroir .cloture { background: var(--code-cloture); }
+  #zone .cm-cloture { background: var(--code-cloture); color: var(--code-balise); }
+  #zone .cm-content ::selection, #zone .cm-content::selection { background: rgba(37, 99, 201, .3); }
 
   /* Vignettes des images de l'onglet */
   #images {
@@ -181,10 +175,7 @@
   <button id="reglages" title="Réglages : lien secret, nettoyage" aria-label="Réglages">⚙</button>
   <span id="etat" title="Synchronisation"></span>
 </div>
-<div id="zone">
-  <div id="miroir" aria-hidden="true"></div>
-  <textarea id="note" spellcheck="false" autofocus></textarea>
-</div>
+<div id="zone"></div>
 <div id="images" hidden></div>
 <nav>
   <button id="puces" class="format" title="Liste à puces (encore : sous-niveau)" aria-label="Liste à puces">•</button>
@@ -212,6 +203,7 @@
   </div>
 </div>
 <div id="toast" role="status"></div>
+<script src="lib/codemirror.js"></script>
 <script src="config.js"></script>
 <script>
 (async () => {
@@ -227,7 +219,78 @@
     suivre();
   }
 
-  const note = document.getElementById('note');
+  // ---- Éditeur (CodeMirror) ----
+  // « note » garde l'interface de l'ancienne zone de texte (value, selectionStart…) : le reste
+  // du code (synchro, listes, images) n'a pas à savoir quel éditeur est utilisé.
+  const { EditorState, EditorSelection, Transaction, Annotation, RangeSetBuilder,
+          EditorView, keymap, Decoration, ViewPlugin, historyKeymap, defaultKeymap } = CM;
+  const historique = CM.history; // (« history » est déjà l'historique du navigateur)
+  const distant = Annotation.define(); // modification venue d'un autre appareil (pas un geste ici)
+  const CLOTURE = /^\s*```/;          // ligne d'ouverture ou de fermeture d'un bloc de code
+  const surSaisie = [];                // appelés après chaque modification faite ici
+  let texteVue = null;                 // texte en cache (recalculé après une modification)
+
+  const decoCode = Decoration.line({ class: 'cm-code' }), decoCloture = Decoration.line({ class: 'cm-cloture' });
+  function decorerCode(state) {
+    const lignes = state.doc.toString().split('\n'), { estCode } = blocsDeCode(lignes);
+    const b = new RangeSetBuilder();
+    let pos = 0;
+    lignes.forEach((l, i) => {
+      if (estCode[i]) b.add(pos, pos, CLOTURE.test(l) ? decoCloture : decoCode);
+      pos += l.length + 1;
+    });
+    return b.finish();
+  }
+  const decorationsCode = ViewPlugin.fromClass(class {
+    constructor(v) { this.decorations = decorerCode(v.state); }
+    update(u) { if (u.docChanged) this.decorations = decorerCode(u.state); }
+  }, { decorations: v => v.decorations });
+
+  const extensions = () => [
+    historique(),
+    EditorView.lineWrapping,
+    decorationsCode,
+    keymap.of([
+      { key: 'Enter', run: () => toucheEntree() },
+      { key: 'Tab', run: () => toucheTab(false) },
+      { key: 'Shift-Tab', run: () => toucheTab(true) },
+      { key: 'Backspace', run: () => toucheRetourArriere() },
+      ...historyKeymap, ...defaultKeymap,
+    ]),
+    EditorView.contentAttributes.of({ spellcheck: 'false', 'aria-label': 'Note' }),
+    EditorView.domEventHandlers({
+      paste: e => surCollage(e),
+      dragover: e => { if ([...e.dataTransfer.types].includes('Files')) e.preventDefault(); return false; },
+      drop: e => surDepot(e),
+    }),
+    EditorView.updateListener.of(u => {
+      if (!u.docChanged) return;
+      texteVue = null;
+      if (u.transactions.some(t => t.annotation(distant))) return;
+      if (!interne) noterSaisie();
+      surSaisie.forEach(f => f());
+    }),
+  ];
+  const vue = new EditorView({ state: EditorState.create({ doc: '', extensions: extensions() }), parent: document.getElementById('zone') });
+
+  const borner = n => Math.max(0, Math.min(n, vue.state.doc.length));
+  const note = {
+    get value() { return texteVue ??= vue.state.doc.toString(); },
+    get selectionStart() { return vue.state.selection.main.from; },
+    get selectionEnd() { return vue.state.selection.main.to; },
+    setSelectionRange(a, b) { vue.dispatch({ selection: EditorSelection.single(borner(a), borner(b)), scrollIntoView: true }); },
+    focus() { vue.focus(); },
+  };
+  // Nouveau texte (changement d'onglet) : nouvel historique d'annulation
+  function chargerTexte(texte) {
+    vue.setState(EditorState.create({ doc: texte, extensions: extensions() }));
+    texteVue = null;
+  }
+  // Accès pour les tests automatiques
+  window.noteTexte = () => note.value;
+  window.noteEcrire = t => remplacer(0, note.value.length, t);
+  window.noteCurseur = (a, b = a) => note.setSelectionRange(a, b);
+  window.noteSelection = () => [note.selectionStart, note.selectionEnd];
   const etat = document.getElementById('etat');
   const boutonsOnglets = [...document.querySelectorAll('#onglets [role="tab"]')];
   const base = DATABASE_URL.replace(/\/$/, '');
@@ -396,18 +459,16 @@
     stock.ecrire(o.cache, texte);
     stock.ecrire(o.cache + ':depart', depart);
     if (o === actif && note.value !== texte) afficher(ancien, texte);
-    if (o === actif) dessinerMiroir();
   }
 
   // Remplace le texte affiché en gardant le curseur au bon endroit
+  // (l'éditeur reporte lui-même le curseur à travers la modification ; elle n'entre pas dans l'historique)
   function afficher(ancien, nouveau) {
-    if (note.value !== ancien || document.activeElement !== note) { note.value = nouveau; return; }
-    const z = zoneModifiee(ancien, nouveau);
-    const decalage = nouveau.length - ancien.length;
-    const placer = pos => pos <= z.debut ? pos : pos >= z.fin ? pos + decalage : z.debut + z.remplacement.length;
-    const debut = placer(note.selectionStart), fin = placer(note.selectionEnd);
-    note.value = nouveau;
-    note.setSelectionRange(debut, fin);
+    const z = zoneModifiee(note.value, nouveau);
+    vue.dispatch({
+      changes: { from: z.debut, to: z.fin, insert: z.remplacement },
+      annotations: [distant.of(true), Transaction.addToHistory.of(false)],
+    });
   }
 
   // Version du serveur reçue (flux, interrogation, réponse à un envoi refusé)
@@ -648,8 +709,7 @@
     if (typeof finirSuite === 'function' && suite) finirSuite();
     actif = o;
     boutonsOnglets.forEach((b, i) => b.setAttribute('aria-selected', onglets[i] === o));
-    note.value = o.texte;
-    dessinerMiroir();
+    chargerTexte(o.texte);
     afficherImages();
     stock.ecrire(ESPACE + 'onglet', onglets.indexOf(o));
     ecouter(o);
@@ -660,7 +720,7 @@
     if (onglets[i] !== actif) choisir(onglets[i]); else renommer(actif);
   });
 
-  note.addEventListener('input', () => {
+  surSaisie.push(() => {
     definir(actif, { texte: note.value });
     planifier(actif);
   });
@@ -679,19 +739,16 @@
   const STYLES_NUMEROS = [['d', '.'], ['l', ')'], ['d', ')']]; // 1.  a)  1)
   let interne = false;
 
-  // Remplace [debut, fin) en gardant l'historique d'annulation (Ctrl+Z) du navigateur
+  // Remplace [debut, fin) : une modification annulable (Ctrl+Z), curseur placé après le texte inséré
   function remplacer(debut, fin, texte) {
     interne = true;
-    note.focus();
-    note.setSelectionRange(debut, fin);
-    let ok = texte.length <= 20000; // au-delà, insertion directe : rapide, mais sans annulation (Ctrl+Z)
-    if (texte && ok) ok = document.execCommand('insertText', false, texte);
-    else if (debut < fin) ok = document.execCommand('delete');
-    if (!ok) {
-      note.setRangeText(texte, debut, fin, 'end');
-      note.dispatchEvent(new Event('input', { bubbles: true }));
-    }
+    vue.dispatch({
+      changes: { from: debut, to: fin, insert: texte },
+      selection: { anchor: debut + texte.length },
+      userEvent: 'input', scrollIntoView: true,
+    });
     interne = false;
+    if (!tactile || vue.hasFocus) vue.focus();
   }
 
   // Position d'un curseur (décalage dans le texte) ↔ (ligne, colonne)
@@ -844,79 +901,75 @@
     return [k, LISTE.exec(lignes[k])[0].length];
   }
 
-  const SAUT_DE_LIGNE = /^(insertLineBreak|insertParagraph)$/;
-
-  // Collage de texte, ou clavier qui envoie le texte ligne par ligne : on n'interprète rien,
+  // Texte arrivé en rafale (clavier qui envoie un collage ligne par ligne) : rien n'est interprété,
   // sinon des lignes de code ressemblant à des listes (« * », « - », « 1. ») seraient modifiées.
-  // Sont considérés comme un collage : un collage ou glisser-déposer, un bloc de texte d'un coup,
-  // ou un saut de ligne arrivant moins de 15 ms après le texte précédent (impossible à la main).
-  // La protection dure 0,6 s et se prolonge tant que le texte arrive en rafale (écarts < 100 ms).
-  const COLLAGE = /^(insertFromPaste|insertFromDrop|insertFromYank|insertReplacementText)$/;
-  let dernierTexte = 0, collageJusqua = 0;
+  // Une rafale : un saut de ligne moins de 15 ms après le texte précédent (impossible à la main) ;
+  // la protection dure 0,6 s et se prolonge tant que le texte arrive vite (écarts < 100 ms).
   const maintenant = () => performance.now();
-  function collageEnCours(e) {
-    const t = maintenant(), ecart = t - dernierTexte;
-    if (COLLAGE.test(e.inputType) || (e.data && (e.data.length > 50 || e.data.includes('\n')))) collageJusqua = t + 600;
-    else if (SAUT_DE_LIGNE.test(e.inputType) && ecart < 15) collageJusqua = t + 600;
-    else if (t < collageJusqua && ecart < 100) collageJusqua = t + 600;
-    if (!e.isComposing && e.inputType !== 'insertCompositionText') dernierTexte = t;
-    return t < collageJusqua;
+  let derniereSaisie = 0, rafaleJusqua = 0, jeton = 0;
+  function noterSaisie() {
+    const t = maintenant();
+    if (t < rafaleJusqua && t - derniereSaisie < 100) rafaleJusqua = t + 600;
+    derniereSaisie = t;
+    jeton++; // toute nouvelle saisie annule une continuation de liste en attente
   }
-  note.addEventListener('paste', () => { collageJusqua = maintenant() + 600; });
 
-  // Entrée dans une liste : le navigateur insère le saut de ligne normalement ; 0,15 s plus tard,
-  // si rien d'autre n'a été saisi entre-temps, la liste est continuée (ou quittée sur un élément vide).
-  // Si du texte arrive aussitôt (collage, clavier qui envoie le texte ligne par ligne), on n'y touche pas.
-  let jeton = 0;
-  note.addEventListener('beforeinput', e => {
-    if (interne) return;
-    collageEnCours(e);
-    jeton++; // tout nouveau texte annule une continuation en attente
-    // Retour arrière juste après « - », « 1. »… : remonte d'un niveau, ou retire le marqueur au niveau 0
-    if (e.inputType !== 'deleteContentBackward' || !e.cancelable || note.selectionStart !== note.selectionEnd) return;
+  // Entrée : saut de ligne simple ; dans le code, la nouvelle ligne garde le retrait ; dans une liste,
+  // l'élément suivant est ajouté 0,15 s plus tard si rien d'autre n'a été saisi entre-temps
+  // (ou la liste est quittée sur un élément vide).
+  function toucheEntree() {
+    if (note.selectionStart !== note.selectionEnd) return false;
+    const t = maintenant(), pos = note.selectionStart;
+    if (t - derniereSaisie < 15 || t < rafaleJusqua) { rafaleJusqua = t + 600; remplacer(pos, pos, '\n'); return true; }
+    const lignes = note.value.split('\n');
+    const [i, col] = pointer(lignes, pos);
+    if (blocsDeCode(lignes).estCode[i]) {
+      remplacer(pos, pos, '\n' + /^[ \t]*/.exec(lignes[i])[0].slice(0, col));
+      return true;
+    }
+    remplacer(pos, pos, '\n');
+    const m = LISTE.exec(lignes[i]);
+    if (!m || col < m[0].length) return true;
+    const mon = jeton, valeur = note.value, apres = note.selectionStart;
+    setTimeout(() => {
+      if (jeton !== mon || note.value !== valeur || note.selectionStart !== apres || note.selectionEnd !== apres) return;
+      const l = valeur.split('\n');
+      const [k] = pointer(l, apres);
+      const c = continuer(l, k);
+      if (!c) return;
+      const curseur = decalageDe(l, c[0], c[1]);
+      appliquer(l, curseur, curseur);
+    }, 150);
+    return true;
+  }
+
+  // Retour arrière juste après « - », « 1. »… : remonte d'un niveau, ou retire le marqueur au niveau 0
+  function toucheRetourArriere() {
+    if (note.selectionStart !== note.selectionEnd) return false;
     const lignes = note.value.split('\n');
     const [i, col] = pointer(lignes, note.selectionStart);
     const m = LISTE.exec(lignes[i]);
-    if (!m || col !== m[0].length || blocsDeCode(lignes).estCode[i]) return;
-    e.preventDefault();
+    if (!m || col !== m[0].length || blocsDeCode(lignes).estCode[i]) return false;
     if (m[1]) { lignes[i] = lignes[i].replace(MOINS_UN_RETRAIT, ''); normaliser(lignes, i, i); }
     else lignes[i] = lignes[i].slice(m[0].length);
     const fin = LISTE.exec(lignes[i]);
     const curseur = decalageDe(lignes, i, fin ? fin[0].length : 0);
     appliquer(lignes, curseur, curseur);
-  });
-  note.addEventListener('input', e => {
-    if (interne || !SAUT_DE_LIGNE.test(e.inputType) || maintenant() < collageJusqua) return;
-    if (note.selectionStart !== note.selectionEnd) return;
-    const mon = jeton, valeur = note.value, pos = note.selectionStart;
-    setTimeout(() => {
-      if (jeton !== mon || note.value !== valeur || note.selectionStart !== pos || note.selectionEnd !== pos) return;
-      if (navigator.scheduling?.isInputPending?.()) return; // du texte est déjà en route
-      const lignes = valeur.split('\n');
-      const [k, col] = pointer(lignes, pos);
-      if (k === 0 || col !== 0) return; // le curseur est au début de la nouvelle ligne
-      if (blocsDeCode(lignes).estCode[k - 1]) return; // pas de listes dans le code
-      const c = continuer(lignes, k);
-      if (!c) return;
-      const curseur = decalageDe(lignes, c[0], c[1]);
-      appliquer(lignes, curseur, curseur);
-    }, 150);
-  });
+    return true;
+  }
 
-  // Tab / Maj+Tab décalent les éléments de liste (ailleurs, Tab garde son rôle normal)
-  note.addEventListener('keydown', e => {
-    if (e.key !== 'Tab' || e.ctrlKey || e.altKey || e.metaKey || e.isComposing) return;
+  // Tab / Maj+Tab : décalent les éléments de liste, 2 espaces dans le code ; ailleurs, rôle normal
+  function toucheTab(retirer) {
     const lignes = note.value.split('\n');
     const [i0] = pointer(lignes, note.selectionStart), [i1] = pointer(lignes, note.selectionEnd);
-    if (blocsDeCode(lignes).estCode[i0]) { e.preventDefault(); tabulerCode(lignes, i0, i1, e.shiftKey); return; }
-    if (!lignes.slice(i0, i1 + 1).some(l => LISTE.test(l))) return;
-    e.preventDefault();
-    decaler(e.shiftKey ? -1 : 1);
-  });
+    if (blocsDeCode(lignes).estCode[i0]) { tabulerCode(lignes, i0, i1, retirer); return true; }
+    if (!lignes.slice(i0, i1 + 1).some(l => LISTE.test(l))) return false;
+    decaler(retirer ? -1 : 1);
+    return true;
+  }
 
   // ---- Blocs de code (``` … ```) ----
   // Syntaxe Markdown : Claude reconnaît le code. À l'écran, un bandeau coloré marque chaque bloc.
-  const CLOTURE = /^\s*```/;
   function blocsDeCode(lignes) {
     const estCode = new Array(lignes.length).fill(false), blocs = [];
     let ouvert = -1;
@@ -930,36 +983,6 @@
     blocs.forEach(b => { for (let i = b.debut; i <= b.fin; i++) estCode[i] = true; });
     return { estCode, blocs };
   }
-
-  // Le miroir reproduit le texte ligne par ligne (même police, même largeur, texte invisible)
-  // pour peindre le fond des blocs de code derrière la zone de texte.
-  const miroir = document.getElementById('miroir'), zone = document.getElementById('zone');
-  let miroirLignes = [], miroirClasses = []; // contenu actuellement dessiné dans le miroir
-  const echapper = t => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  function dessinerMiroir() {
-    const v = note.value, avecCode = v.includes('```');
-    zone.classList.toggle('avec-code', avecCode);
-    if (!avecCode) { if (miroir.firstChild) miroir.replaceChildren(); miroirLignes = miroirClasses = []; return; }
-    const lignes = v.split('\n'), { estCode } = blocsDeCode(lignes);
-    const classes = lignes.map((l, i) => estCode[i] ? (CLOTURE.test(l) ? 'cloture' : 'code') : '');
-    // seules les lignes qui ont changé (texte ou type) sont redessinées : rapide même sur une longue note
-    const memes = (i, j) => lignes[i] === miroirLignes[j] && classes[i] === miroirClasses[j];
-    let d = 0;
-    while (d < lignes.length && d < miroirLignes.length && memes(d, d)) d++;
-    let f = 0;
-    while (f < lignes.length - d && f < miroirLignes.length - d && memes(lignes.length - 1 - f, miroirLignes.length - 1 - f)) f++;
-    for (let k = miroirLignes.length - f - 1; k >= d; k--) miroir.children[k].remove();
-    const html = lignes.slice(d, lignes.length - f).map((l, k) =>
-      `<div${classes[d + k] ? ` class="${classes[d + k]}"` : ''}>${l ? echapper(l) : '<br>'}</div>`).join('');
-    if (html) {
-      const suivant = miroir.children[d];
-      if (suivant) suivant.insertAdjacentHTML('beforebegin', html); else miroir.insertAdjacentHTML('beforeend', html);
-    }
-    miroirLignes = lignes;
-    miroirClasses = classes;
-    miroir.scrollTop = note.scrollTop;
-  }
-  note.addEventListener('scroll', () => { miroir.scrollTop = note.scrollTop; });
 
   // Bouton </> : entoure la sélection (ou la ligne) de ```, ou retire les ``` du bloc où se trouve le curseur
   function basculerCode() {
@@ -1031,7 +1054,6 @@
       texte = `${avant}\`\`\`\n${texte.replace(/\n+$/, '')}\n\`\`\`${apres}`;
       code = true;
     }
-    collageJusqua = maintenant() + 600;
     remplacer(note.selectionStart, note.selectionEnd, texte);
     if (code) annoncer('Code détecté : entouré de ``` (bouton </> pour retirer)');
   }
@@ -1270,26 +1292,26 @@
 
   // Visionneuse
   const visionneuse = document.getElementById('visionneuse'), grande = document.getElementById('grande');
-  let vue = null;
+  let imageVue = null;
   function ouvrirImage(o, id) {
     const x = [...o.images, ...o.locales].find(y => y.id === id);
     if (!x) return;
-    vue = { o, id };
+    imageVue = { o, id };
     grande.src = imagesCompletes.get(id) || x.mini;
     visionneuse.hidden = false;
-    if (!imagesCompletes.has(id)) telechargerImages(o).then(() => { if (vue?.id === id && imagesCompletes.has(id)) grande.src = imagesCompletes.get(id); });
+    if (!imagesCompletes.has(id)) telechargerImages(o).then(() => { if (imageVue?.id === id && imagesCompletes.has(id)) grande.src = imagesCompletes.get(id); });
   }
-  const fermerImage = () => { visionneuse.hidden = true; vue = null; grande.removeAttribute('src'); };
+  const fermerImage = () => { visionneuse.hidden = true; imageVue = null; grande.removeAttribute('src'); };
   document.getElementById('v-fermer').onclick = fermerImage;
   visionneuse.addEventListener('click', e => { if (e.target === visionneuse || e.target === grande) fermerImage(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !visionneuse.hidden) fermerImage(); });
   document.getElementById('v-supprimer').onclick = async () => {
-    const { o, id } = vue;
+    const { o, id } = imageVue;
     fermerImage();
     try { await supprimerImage(o, id); annoncer('Image supprimée'); } catch { annoncer('Suppression impossible (réseau)'); }
   };
   document.getElementById('v-copier').onclick = async () => {
-    const donnees = imagesCompletes.get(vue.id);
+    const donnees = imagesCompletes.get(imageVue.id);
     if (!donnees) { annoncer('Image en cours de téléchargement…'); return; }
     try {
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': enPng(donnees) })]);
@@ -1299,44 +1321,31 @@
 
   // Images glissées ou collées dans la zone de texte
   const imagesDuHtml = html => [...(html || '').matchAll(/<img[^>]+src=["'](data:image\/[^"']+)["']/gi)].map(m => m[1]);
-  note.addEventListener('paste', e => {
-    collageJusqua = maintenant() + 600;
+  // Collage : images ajoutées à l'onglet ; du code est entouré de ``` ; le reste est collé tel quel
+  function surCollage(e) {
     const cd = e.clipboardData;
-    if (!cd) return;
+    if (!cd) return false;
     const texte = cd.getData('text/plain');
     const duHtml = imagesDuHtml(cd.getData('text/html'));
     const fichiers = [...cd.files].filter(f => f.type.startsWith('image/'));
     if (duHtml.length) Promise.all(duHtml.map(versBlob)).then(ajouterImages); // copié depuis cette appli : toutes les images
     else if (fichiers.length) ajouterImages(fichiers);
-    if (!texte) { if (duHtml.length || fichiers.length) e.preventDefault(); return; }
+    if (!texte) { if (duHtml.length || fichiers.length) { e.preventDefault(); return true; } return false; }
     const lignes = note.value.split('\n');
-    if (ressembleACode(texte) && !blocsDeCode(lignes).estCode[pointer(lignes, note.selectionStart)[0]])
-      aEnvelopper = { debut: note.selectionStart }; // les ``` seront ajoutés juste après le collage
-  });
-
-  // Après un collage de code : ``` avant et après le texte collé (deux petites insertions, rapides et annulables)
-  let aEnvelopper = null;
-  note.addEventListener('input', e => {
-    if (!aEnvelopper || interne) return;
-    const { debut } = aEnvelopper;
-    aEnvelopper = null;
-    if (e.inputType !== 'insertFromPaste') return;
-    const v = note.value, fin = note.selectionStart;
-    let p = fin;
-    while (p > debut && v[p - 1] === '\n') p--; // la clôture se place après la dernière ligne de code
-    remplacer(p, p, p === fin && fin < v.length && v[fin] !== '\n' ? '\n```\n' : '\n```');
-    remplacer(debut, debut, (debut > 0 && v[debut - 1] !== '\n' ? '\n' : '') + '```\n');
-    const apres = note.value.indexOf('```', p + 5) + 3;
-    note.setSelectionRange(apres, apres);
-    annoncer('Code détecté : entouré de ``` (bouton </> pour retirer)');
-  });
-  note.addEventListener('dragover', e => { if ([...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
-  note.addEventListener('drop', e => {
+    if (ressembleACode(texte) && !blocsDeCode(lignes).estCode[pointer(lignes, note.selectionStart)[0]]) {
+      e.preventDefault();
+      insererTexte(texte);
+      return true;
+    }
+    return false; // collage normal par l'éditeur
+  }
+  function surDepot(e) {
     const fichiers = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
-    if (!fichiers.length) return;
+    if (!fichiers.length) return false;
     e.preventDefault();
     ajouterImages(fichiers);
-  });
+    return true;
+  }
 
   // ---- Boutons ----
   // Les boutons ne doivent pas retirer le focus au texte (le clavier du téléphone reste ouvert)
@@ -1427,7 +1436,7 @@
     clearTimeout(minuteurSuite);
     boutonCopier.textContent = 'Copier';
   }
-  note.addEventListener('input', () => { if (suite) finirSuite(); });
+  surSaisie.push(() => { if (suite) finirSuite(); });
 
   async function copierImageSuivante() {
     const { images, i } = suite;

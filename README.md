@@ -79,11 +79,12 @@ celles de l'appli normale).
   copie l'image suivante. Sur téléphone, **Partager tout** envoie texte et images d'un coup.
 - **Coller** : texte au curseur, images ajoutées à l'onglet.
 - **Code** : bouton `</>` (balises ``` autour de la sélection ou de la ligne ; dans un bloc, les
-  retire) et détection automatique au collage. Le code s'affiche en couleur (bleu-vert, lignes ```
-  atténuées) sur un bandeau ; pas de puces automatiques ni de renumérotation dans le code ; Tab y
-  insère 2 espaces. Technique : la zone de texte devient transparente (curseur et sélection
-  gardés) et une copie alignée au pixel affiche le texte ; la police reste la même (une taille
-  différente décalerait le curseur).
+  retire) et détection automatique au collage. Le code s'affiche plus petit, en police à chasse
+  fixe et en couleur, sur un bandeau ; pas de puces automatiques ni de renumérotation dans le code ;
+  Tab y insère 2 espaces, Entrée garde le retrait.
+- **Éditeur** : [CodeMirror 6](https://codemirror.net) (licence MIT), empaqueté dans
+  `lib/codemirror.js` et servi par le même site (rien à autoriser sur un proxy). Annulation propre
+  (Ctrl+Z ne défait jamais une modification venue d'un autre appareil), historique par onglet.
 - **Réglages ⚙** : thème (auto, clair, sombre), lien secret, **Supprimer les images** (toutes celles du bloc-notes, texte conservé)
   et **Tout effacer** (notes, noms et images du bloc-notes, appli normale comprise). Les règles
   n'autorisent sur un bloc-notes entier que sa suppression.
