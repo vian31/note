@@ -66,21 +66,21 @@ normale n'est pas touchée. Il faut publier les règles de `database.rules.json`
 celles de l'appli normale).
 
 - **Barre unique** : `•` `1.` `</>` `🖼` Effacer Copier Coller (⚙ réglages et point d'état en haut).
-  `•` / `1.` sur une ligne déjà en liste ouvrent un sous-niveau ; Retour arrière juste après
-  la puce remonte d'un niveau (ou retire la puce).
+  Deux niveaux au plus : 1er appui sur `1.` → `1.`, 2e → `a)`, 3e → plus de liste (idem `•` → `-`,
+  `•`, rien). Tab ne crée pas de 3e niveau. Retour arrière juste après la puce remonte d'un niveau.
 - **Images** : Ctrl+V d'une capture (Win+Maj+S), glisser-déposer, bouton Coller, ou bouton 🖼
   (galerie / appareil photo : sur téléphone, les captures ne passent pas par le presse-papiers). Réduites à
   1568 px, en WebP (~50–120 Ko), découpées en morceaux de texte dans Firebase (même domaine, même
   format que les notes : passe les proxys) ; si un envoi échoue, les morceaux sont réduits de
   moitié au nouvel essai. Vignettes synchronisées ; toucher une vignette : agrandir, copier
   l'image, supprimer.
-- **Copier** : texte + images. Le presse-papiers reçoit le texte, une version riche (texte + toutes
-  les images) et la 1re image en PNG. Sur téléphone, une fenêtre propose aussi de **Partager**
-  texte et images d'un coup vers l'appli Claude.
+- **Copier** : en plusieurs fois quand il y a des images (Claude ne prend qu'un contenu à la fois
+  dans le presse-papiers) : le texte, puis le bouton devient `🖼 1/2`, `🖼 2/2`… et chaque appui
+  copie l'image suivante. Sur téléphone, **Partager tout** envoie texte et images d'un coup.
 - **Coller** : texte au curseur, images ajoutées à l'onglet.
 - **Code** : bouton `</>` (balises ``` autour de la sélection ou de la ligne ; dans un bloc, les
   retire) et détection automatique au collage. Bandeau coloré derrière les blocs ; pas de puces
   automatiques ni de renumérotation dans le code ; Tab y insère 2 espaces.
-- **Réglages ⚙** : lien secret, **Supprimer les images** (toutes celles du bloc-notes, texte conservé)
+- **Réglages ⚙** : thème (auto, clair, sombre), lien secret, **Supprimer les images** (toutes celles du bloc-notes, texte conservé)
   et **Tout effacer** (notes, noms et images du bloc-notes, appli normale comprise). Les règles
   n'autorisent sur un bloc-notes entier que sa suppression.

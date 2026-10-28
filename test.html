@@ -9,20 +9,33 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#ffffff">
+<script>
+  // Thème choisi dans les réglages, appliqué avant l'affichage (pas de flash)
+  try { const t = localStorage.getItem('theme'); if (t === 'clair' || t === 'sombre') document.documentElement.dataset.theme = t; } catch {}
+</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <style>
   * { box-sizing: border-box; }
   :root {
+    color-scheme: light;
     --fond: #fff; --texte: #111; --bord: #e5e5e5; --bouton: #e8ecf2; --bord-bouton: #c3ccd8; --appui: #d5dce6; --voile: rgba(0,0,0,.35);
     --accent: #2563c9; --sur-accent: #fff;
     --code: #f3f5f8; --code-cloture: #e7ebf1; --code-bord: #8a9bb5;
   }
+  /* Thème : automatique (réglage du téléphone / PC), ou forcé dans ⚙ Réglages */
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="clair"]) {
+      color-scheme: dark;
       --fond: #111; --texte: #eee; --bord: #333; --bouton: #2a313c; --bord-bouton: #46505f; --appui: #3a4351; --voile: rgba(0,0,0,.6);
       --accent: #4b8bf0; --sur-accent: #fff;
       --code: #1b2029; --code-cloture: #232a35; --code-bord: #5d7091;
     }
+  }
+  :root[data-theme="sombre"] {
+    color-scheme: dark;
+    --fond: #111; --texte: #eee; --bord: #333; --bouton: #2a313c; --bord-bouton: #46505f; --appui: #3a4351; --voile: rgba(0,0,0,.6);
+    --accent: #4b8bf0; --sur-accent: #fff;
+    --code: #1b2029; --code-cloture: #232a35; --code-bord: #5d7091;
   }
   html, body { margin: 0; height: 100%; overflow: hidden; background: var(--fond); color: var(--texte); }
   body { display: flex; flex-direction: column; font: 18px/1.5 system-ui, sans-serif; }
@@ -247,7 +260,7 @@
     toast.textContent = message;
     toast.classList.add('visible');
     clearTimeout(toast.minuteur);
-    toast.minuteur = setTimeout(() => toast.classList.remove('visible'), 1500);
+    toast.minuteur = setTimeout(() => toast.classList.remove('visible'), Math.max(1500, message.length * 55));
   }
 
   // Clé secrète : dans l'adresse (#…), sinon mémorisée sur l'appareil
@@ -611,6 +624,7 @@
 
   // ---- Interface ----
   function choisir(o) {
+    if (typeof finirSuite === 'function' && suite) finirSuite();
     actif = o;
     boutonsOnglets.forEach((b, i) => b.setAttribute('aria-selected', onglets[i] === o));
     note.value = o.texte;
@@ -779,10 +793,15 @@
     });
   }
 
+  // Deux niveaux de liste au plus : un élément déjà en sous-niveau ne se décale pas davantage
+  const NIVEAU_MAX = 1;
   function decaler(sens) {
     transformer((l, i0, i1) => {
-      for (let i = i0; i <= i1; i++)
+      for (let i = i0; i <= i1; i++) {
+        const it = analyser(l[i]);
+        if (sens > 0 && it && it.prof >= NIVEAU_MAX) continue;
         l[i] = sens > 0 ? (i0 === i1 || l[i].trim() ? RETRAIT + l[i] : l[i]) : l[i].replace(MOINS_UN_RETRAIT, '');
+      }
     });
   }
 
@@ -1281,7 +1300,16 @@
     if (note.selectionEnd > note.selectionStart && col1 === 0 && i1 > i0) i1--;
     const concernees = lignes.slice(i0, i1 + 1).filter((l, k) => i0 === i1 || l.trim());
     const deja = concernees.every(l => { const it = analyser(l); return it && (type === 'puce' ? it.puce : !it.puce); });
-    if (deja) decaler(1); else mettreListe(type);
+    if (!deja) mettreListe(type);                                          // 1er appui : liste
+    else if (concernees.some(l => analyser(l).prof === 0)) decaler(1);     // 2e appui : sous-niveau
+    else annulerListe(i0, i1);                                            // 3e appui : plus de liste
+  }
+
+  // Retire marqueurs et retraits des lignes de liste i0..i1 (texte simple)
+  function annulerListe(i0, i1) {
+    transformer((l, a, b) => {
+      for (let i = i0; i <= i1; i++) { const it = analyser(l[i]); if (it) l[i] = it.corps; }
+    });
   }
   document.getElementById('puces').onclick = () => boutonListe('puce');
   document.getElementById('numeros').onclick = () => boutonListe('numero');
@@ -1317,10 +1345,6 @@
     }
   }
 
-  // Version HTML du texte et des images (pour les applis qui acceptent le collage riche)
-  const versHtml = (texte, images) =>
-    `<div style="white-space:pre-wrap">${echapper(texte)}</div>` + images.map(d => `<p><img src="${d}"></p>`).join('');
-
   const tactile = matchMedia('(pointer: coarse)').matches;
   const peutPartagerFichiers = (() => {
     try { return !!navigator.canShare?.({ files: [new File(['x'], 'x.png', { type: 'image/png' })] }); } catch { return false; }
@@ -1342,9 +1366,38 @@
     }
   }
 
-  // Copier : texte + images. Le presse-papiers reçoit le texte, une version riche (texte + toutes
-  // les images) et la 1re image. Sur téléphone, un partage permet d'envoyer toutes les images d'un coup.
-  document.getElementById('copier').onclick = async () => {
+  // Copier : le texte, puis chaque image séparément. Une appli comme Claude ne prend qu'un seul
+  // contenu à la fois dans le presse-papiers (le texte si texte et image sont copiés ensemble) :
+  // le bouton devient « 🖼 1/2 », « 🖼 2/2 »… et chaque appui copie l'image suivante.
+  // Sur téléphone, « Partager tout » envoie texte et images d'un coup.
+  const boutonCopier = document.getElementById('copier');
+  let suite = null, minuteurSuite;
+  function finirSuite() {
+    suite = null;
+    clearTimeout(minuteurSuite);
+    boutonCopier.textContent = 'Copier';
+  }
+  note.addEventListener('input', () => { if (suite) finirSuite(); });
+
+  async function copierImageSuivante() {
+    const { images, i } = suite;
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': enPng(images[i]) })]);
+    } catch {
+      finirSuite();
+      annoncer('Copie d\'image refusée par le navigateur');
+      return;
+    }
+    annoncer(`Image ${i + 1}/${images.length} copiée ✓`);
+    suite.i++;
+    if (suite.i >= images.length) { finirSuite(); return; }
+    boutonCopier.textContent = `🖼 ${suite.i + 1}/${images.length}`;
+    clearTimeout(minuteurSuite);
+    minuteurSuite = setTimeout(finirSuite, 120000);
+  }
+
+  boutonCopier.onclick = async () => {
+    if (suite) return copierImageSuivante();
     const o = actif, texte = propre(note.value), images = imagesPretes(o);
     const attendues = o.images.length + o.locales.length;
     if (!images.length) {
@@ -1352,25 +1405,21 @@
       annoncer(attendues ? 'Images pas encore téléchargées : texte copié seul' : texte ? 'Copié ✓' : 'Note vide');
       return;
     }
-    let copie = 'texte + 1re image';
-    try {
-      const contenu = { 'text/html': new Blob([versHtml(texte, images)], { type: 'text/html' }), 'image/png': enPng(images[0]) };
-      if (texte) contenu['text/plain'] = new Blob([texte], { type: 'text/plain' });
-      await navigator.clipboard.write([new ClipboardItem(contenu)]);
-    } catch {
-      try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': enPng(images[0]) })]); copie = '1re image'; }
-      catch { await copier(texte); copie = 'texte seul'; }
-    }
     if (tactile && peutPartagerFichiers) {
       const fichiers = fichiersDe(images);
       const r = await popup({
-        message: `Copié (${copie}). Pour envoyer ${images.length > 1 ? `les ${images.length} images` : 'l\'image'} et le texte à Claude d'un coup : Partager, puis choisir Claude.`,
-        boutons: [{ texte: 'Fermer', valeur: false }, { texte: 'Partager', classe: 'principal', valeur: true }],
+        message: `${images.length > 1 ? `${images.length} images` : '1 image'}${texte ? ' et du texte' : ''}. Partager tout envoie le tout d'un coup (choisir Claude) ; sinon, copie en plusieurs fois.`,
+        boutons: [{ texte: 'Une par une', valeur: 'suite' }, { texte: 'Partager tout', classe: 'principal', valeur: 'partage' }],
       });
-      if (r.valeur) partager(texte, await fichiers);
-    } else {
-      annoncer(`Copié : ${copie === 'texte + 1re image' ? `texte + ${images.length} image${images.length > 1 ? 's' : ''}` : copie}${images.length < attendues ? ' (images en cours de téléchargement)' : ''}`);
+      if (r.valeur === 'partage') { partager(texte, await fichiers); return; }
+      if (r.valeur !== 'suite') return;
     }
+    suite = { images, i: 0 };
+    if (!texte) return copierImageSuivante();
+    await copier(texte);
+    boutonCopier.textContent = `🖼 1/${images.length}`;
+    minuteurSuite = setTimeout(finirSuite, 120000);
+    annoncer(`Texte copié ✓ · ensuite : 🖼 1/${images.length}${images.length < attendues ? ' (images en téléchargement)' : ''}`);
   };
 
   // Coller : texte au curseur (code entouré de ```), images ajoutées à l'onglet
@@ -1420,7 +1469,20 @@
     annoncer('Effacé');
   };
 
-  // ---- Réglages : lien secret et nettoyage de la base ----
+  // ---- Réglages : thème, lien secret et nettoyage de la base ----
+  const themeActuel = () => document.documentElement.dataset.theme || 'auto';
+  function appliquerTheme(t) {
+    if (t === 'auto') { delete document.documentElement.dataset.theme; stock.effacer('theme'); }
+    else { document.documentElement.dataset.theme = t; stock.ecrire('theme', t); }
+    majCouleurBarre();
+  }
+  // Couleur de la barre du navigateur (téléphone) assortie au fond
+  function majCouleurBarre() {
+    document.querySelector('meta[name="theme-color"]').content = getComputedStyle(document.documentElement).getPropertyValue('--fond').trim();
+  }
+  matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', majCouleurBarre);
+  majCouleurBarre();
+
   const supprimer = url => fetch(url, { method: 'PUT', body: 'null' }).then(r => { if (!r.ok) throw new Error(r.status); });
   const INDEX_TOUS = ['i1', 'i2', 'i3', 'ti1', 'ti2', 'ti3']; // appli normale et page de test
 
@@ -1460,6 +1522,7 @@
       message: 'Lien secret de ce bloc-notes, à ouvrir sur vos autres appareils. Toute personne qui l\'a peut lire et modifier les notes.',
       valeurChamp: lienSecret(cle),
       boutons: [
+        { texte: `Thème : ${{ auto: 'auto', clair: 'clair', sombre: 'sombre' }[themeActuel()]}`, valeur: 'theme' },
         { texte: 'Supprimer les images', classe: 'danger', valeur: 'images' },
         { texte: 'Tout effacer', classe: 'danger', valeur: 'tout' },
         { texte: 'Fermer', valeur: false },
@@ -1467,6 +1530,18 @@
       ],
     });
     if (r.valeur === 'lien') { await copier(lienSecret(cle)); annoncer('Lien copié ✓'); return; }
+    if (r.valeur === 'theme') {
+      const t = await popup({
+        message: 'Thème de l\'affichage (sur cet appareil)',
+        boutons: [
+          { texte: 'Auto', valeur: 'auto', classe: themeActuel() === 'auto' ? 'principal' : '' },
+          { texte: 'Clair', valeur: 'clair', classe: themeActuel() === 'clair' ? 'principal' : '' },
+          { texte: 'Sombre', valeur: 'sombre', classe: themeActuel() === 'sombre' ? 'principal' : '' },
+        ],
+      });
+      if (t.valeur) appliquerTheme(t.valeur);
+      return;
+    }
     if (r.valeur !== 'images' && r.valeur !== 'tout') return;
     const tout = r.valeur === 'tout';
     const ok = await popup({
