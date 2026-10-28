@@ -20,7 +20,7 @@
     color-scheme: light;
     --fond: #fff; --texte: #111; --bord: #e5e5e5; --bouton: #e8ecf2; --bord-bouton: #c3ccd8; --appui: #d5dce6; --voile: rgba(0,0,0,.35);
     --accent: #2563c9; --sur-accent: #fff;
-    --code: #f3f5f8; --code-cloture: #e7ebf1; --code-bord: #8a9bb5; --code-texte: #0b6584; --code-balise: #8792a5;
+    --code: #f3f5f8; --code-cloture: #e7ebf1; --code-bord: #8a9bb5; --exterieur: #eceff4; --code-texte: #0b6584; --code-balise: #8792a5;
   }
   /* Thème : automatique (réglage du téléphone / PC), ou forcé dans ⚙ Réglages */
   @media (prefers-color-scheme: dark) {
@@ -28,14 +28,14 @@
       color-scheme: dark;
       --fond: #111; --texte: #eee; --bord: #333; --bouton: #2a313c; --bord-bouton: #46505f; --appui: #3a4351; --voile: rgba(0,0,0,.6);
       --accent: #4b8bf0; --sur-accent: #fff;
-      --code: #1b2029; --code-cloture: #232a35; --code-bord: #5d7091; --code-texte: #7cc7e6; --code-balise: #6c778a;
+      --code: #1b2029; --code-cloture: #232a35; --code-bord: #5d7091; --exterieur: #070707; --code-texte: #7cc7e6; --code-balise: #6c778a;
     }
   }
   :root[data-theme="sombre"] {
     color-scheme: dark;
     --fond: #111; --texte: #eee; --bord: #333; --bouton: #2a313c; --bord-bouton: #46505f; --appui: #3a4351; --voile: rgba(0,0,0,.6);
     --accent: #4b8bf0; --sur-accent: #fff;
-    --code: #1b2029; --code-cloture: #232a35; --code-bord: #5d7091; --code-texte: #7cc7e6; --code-balise: #6c778a;
+    --code: #1b2029; --code-cloture: #232a35; --code-bord: #5d7091; --exterieur: #070707; --code-texte: #7cc7e6; --code-balise: #6c778a;
   }
   html, body { margin: 0; height: 100%; overflow: hidden; background: var(--fond); color: var(--texte); }
   body { display: flex; flex-direction: column; font: 18px/1.5 system-ui, sans-serif; }
@@ -101,6 +101,21 @@
     nav { gap: 4px; padding-left: 6px; padding-right: 6px; font-size: 15px; }
     nav button { padding: 7px 5px; }
     nav .format:not(#coller) { min-width: 30px; }
+  }
+  /* Grand écran (PC) : colonne centrée façon feuille, boutons à leur taille naturelle,
+     mise en forme à gauche et actions à droite */
+  @media (min-width: 700px) {
+    html, body { background: var(--exterieur); }
+    #onglets, #zone, #images, nav {
+      width: 100%; max-width: 920px; margin-left: auto; margin-right: auto;
+      background: var(--fond); border-left: 1px solid var(--bord); border-right: 1px solid var(--bord);
+    }
+    #zone { flex: 1; }
+    nav { gap: 8px; padding: 10px 16px max(10px, env(safe-area-inset-bottom)); }
+    nav button, nav .format:not(#coller) { flex: 0 0 auto; min-width: 0; padding: 7px 14px; }
+    nav .format:not(#coller) { min-width: 42px; padding: 7px 10px; }
+    #effacer { margin-left: auto; }
+    #copier { min-width: 110px; }
   }
   @media (max-width: 340px) {
     nav { gap: 3px; padding-left: 4px; padding-right: 4px; font-size: 13px; }
