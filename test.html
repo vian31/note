@@ -70,6 +70,21 @@
   #zone .cm-dans-balise { padding-left: 13px; border-left: 3px solid var(--tag-bord); background: var(--tag-fond); }
   #zone .cm-balise { color: var(--tag-texte); font-weight: 600; }
   #zone .cm-titre { font-weight: 700; }
+  /* Bloc long replié en vignette (comme les longs collages dans Claude) */
+  #zone .cm-pli { padding: 3px 16px 3px 13px; border-left: 3px solid var(--tag-bord); background: var(--tag-fond); }
+  #zone .cm-pli.code { border-left-color: var(--code-bord); background: var(--code); }
+  #zone .cm-vignette {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px;
+    padding: 6px 10px; cursor: pointer; user-select: none;
+    border: 1px solid var(--tag-bord); border-radius: 8px; background: var(--fond); font-size: .82em; line-height: 1.35;
+  }
+  #zone .cm-pli.code .cm-vignette { border-color: var(--code-bord); }
+  #zone .cm-vignette .titre { font-weight: 600; white-space: nowrap; color: var(--tag-texte); }
+  #zone .cm-pli.code .cm-vignette .titre { color: var(--code-texte); }
+  #zone .cm-vignette .apercu { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .6;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  #zone .cm-vignette .action { white-space: nowrap; color: var(--accent); font-weight: 600; }
+  #zone .cm-replier { margin-left: 10px; font-size: .75em; color: var(--accent); cursor: pointer; user-select: none; font-family: system-ui, sans-serif; }
   #zone .cm-content ::selection, #zone .cm-content::selection { background: rgba(37, 99, 201, .3); }
 
   /* Vignettes des images de l'onglet */
@@ -240,7 +255,8 @@
   // « note » garde l'interface de l'ancienne zone de texte (value, selectionStart…) : le reste
   // du code (synchro, listes, images) n'a pas à savoir quel éditeur est utilisé.
   const { EditorState, EditorSelection, Transaction, Annotation, RangeSetBuilder,
-          EditorView, keymap, Decoration, ViewPlugin, historyKeymap, defaultKeymap } = CM;
+          EditorView, keymap, Decoration, ViewPlugin, historyKeymap, defaultKeymap,
+          StateField, StateEffect, WidgetType } = CM;
   const historique = CM.history; // (« history » est déjà l'historique du navigateur)
   const distant = Annotation.define(); // modification venue d'un autre appareil (pas un geste ici)
   const CLOTURE = /^\s*```/;          // ligne d'ouverture ou de fermeture d'un bloc de code
@@ -289,7 +305,136 @@
     update(u) { if (u.docChanged) this.decorations = decorerCode(u.state); }
   }, { decorations: v => v.decorations });
 
+  // ---- Blocs longs repliés en vignette ----
+  // Un bloc <nom>…</nom> ou ``` … ``` dont le contenu fait au moins 30 lignes ou 3000 caractères
+  // s'affiche replié (le texte reste entier dans la note, synchronisé et copié tel quel).
+  // Toucher la vignette déplie ; « replier » referme. Un bloc qui grossit pendant qu'on tape dedans
+  // reste déplié ; après un collage, il se replie et le curseur passe sous le bloc.
+  const SEUIL_LIGNES = 30, SEUIL_CARACTERES = 3000;
+  const basculerPli = StateEffect.define();     // valeur : position de la ligne d'ouverture du bloc
+  const tailleLisible = n => n < 1024 ? `${n} car.` : `${(n / 1024).toFixed(n < 10240 ? 1 : 0).replace('.', ',')} Ko`;
+
+  class VignettePli extends WidgetType {
+    constructor(info) { super(); this.info = info; }
+    eq(autre) { return autre.info.resume === this.info.resume; }
+    toDOM(view) {
+      const { code, nom, lignes, caracteres, apercu, ouverture } = this.info;
+      const bloc = document.createElement('div');
+      bloc.className = 'cm-pli' + (code ? ' code' : '');
+      const v = document.createElement('div');
+      v.className = 'cm-vignette';
+      v.title = 'Afficher le contenu';
+      const titre = document.createElement('span');
+      titre.className = 'titre';
+      titre.textContent = `${code ? '</>' : '📄'} ${nom} · ${lignes} ligne${lignes > 1 ? 's' : ''} · ${tailleLisible(caracteres)}`;
+      const ap = document.createElement('span');
+      ap.className = 'apercu';
+      ap.textContent = apercu;
+      const action = document.createElement('span');
+      action.className = 'action';
+      action.textContent = 'Afficher ▾';
+      v.append(titre, ap, action);
+      v.addEventListener('mousedown', e => { e.preventDefault(); view.dispatch({ effects: basculerPli.of(ouverture) }); });
+      bloc.append(v);
+      return bloc;
+    }
+    ignoreEvent() { return true; }
+  }
+  class BoutonReplier extends WidgetType {
+    constructor(ouverture) { super(); this.ouverture = ouverture; }
+    eq(autre) { return autre.ouverture === this.ouverture; }
+    toDOM(view) {
+      const b = document.createElement('span');
+      b.className = 'cm-replier';
+      b.textContent = '▴ replier';
+      b.addEventListener('mousedown', e => { e.preventDefault(); view.dispatch({ effects: basculerPli.of(this.ouverture) }); });
+      return b;
+    }
+    ignoreEvent() { return true; }
+  }
+
+  // Blocs assez longs pour être repliés : { ouverture, de, a (contenu), code, nom, lignes, caracteres, apercu }
+  function blocsLongs(state) {
+    const doc = state.doc, lignes = doc.toString().split('\n'), { estCode, blocs } = blocsDeCode(lignes);
+    const candidats = [
+      ...blocs.map(b => ({ code: true, debut: b.debut, c1: b.ferme ? b.fin - 1 : b.fin, nom: lignes[b.debut].trim().slice(3).trim() || 'code' })),
+      ...balisesDe(lignes, estCode).map(b => ({ code: false, debut: b.debut, c1: b.fin - 1, nom: b.nom })),
+    ].sort((a, b) => a.debut - b.debut);
+    const longs = [];
+    candidats.forEach(c => {
+      const c0 = c.debut + 1;
+      if (c.c1 < c0) return;
+      const contenu = lignes.slice(c0, c.c1 + 1), caracteres = contenu.reduce((t, l) => t + l.length + 1, -1);
+      if (contenu.length < SEUIL_LIGNES && caracteres < SEUIL_CARACTERES) return;
+      longs.push({
+        code: c.code, nom: c.nom, lignes: contenu.length, caracteres,
+        apercu: (contenu.find(l => l.trim()) || '').trim().slice(0, 120),
+        ouverture: doc.line(c.debut + 1).from, finOuverture: doc.line(c.debut + 1).to,
+        de: doc.line(c0 + 1).from, a: doc.line(c.c1 + 1).to,
+      });
+    });
+    return longs;
+  }
+
+  function calculerPlis(state, deplies) {
+    const decos = [], replies = [], longs = blocsLongs(state);
+    deplies = deplies.filter(p => longs.some(b => b.ouverture === p)); // seulement des blocs longs existants
+    let finPli = -1;
+    longs.forEach(b => {
+      if (b.de < finPli) return; // à l'intérieur d'un bloc déjà replié
+      if (deplies.includes(b.ouverture)) {
+        decos.push(Decoration.widget({ widget: new BoutonReplier(b.ouverture), side: 1 }).range(b.finOuverture));
+        return;
+      }
+      const info = { ...b, resume: `${b.code}|${b.nom}|${b.lignes}|${b.caracteres}|${b.apercu}|${b.ouverture}` };
+      const d = Decoration.replace({ widget: new VignettePli(info), block: true }).range(b.de, b.a);
+      decos.push(d);
+      replies.push(d);
+      finPli = b.a;
+    });
+    return { deplies, decos: Decoration.set(decos, true), replies: Decoration.set(replies, true) };
+  }
+
+  const plis = StateField.define({
+    create: state => calculerPlis(state, []),
+    update(v, tr) {
+      let deplies = v.deplies;
+      // un bloc déplié dont la ligne d'ouverture est modifiée (ou supprimée) est oublié
+      if (tr.docChanged) deplies = deplies.filter(p => !tr.changes.touchesRange(p)).map(p => tr.changes.mapPos(p, -1));
+      for (const e of tr.effects) if (e.is(basculerPli))
+        deplies = deplies.includes(e.value) ? deplies.filter(p => p !== e.value) : [...deplies, e.value];
+      if (!tr.docChanged && deplies === v.deplies) return v;
+      // un bloc qui devient long pendant qu'on tape dedans reste déplié
+      if (tr.docChanged && !tr.isUserEvent('input.paste') && !tr.annotation(distant)) {
+        const tete = tr.state.selection.main.head;
+        blocsLongs(tr.state).forEach(b => {
+          if (tete >= b.de && tete <= b.a && !deplies.includes(b.ouverture)) deplies = [...deplies, b.ouverture];
+        });
+      }
+      return calculerPlis(tr.state, deplies);
+    },
+    provide: f => [
+      EditorView.decorations.from(f, v => v.decos),
+      EditorView.atomicRanges.of(view => view.state.field(f).replies),
+    ],
+  });
+
+  // Après un collage qui crée ou agrandit un bloc replié, le curseur passe sous le bloc
+  function sortirDesPlis() {
+    const { replies } = vue.state.field(plis), tete = vue.state.selection.main.head;
+    let fin = -1;
+    replies.between(tete, tete, (de, a) => { if (tete >= de && tete <= a) fin = a; });
+    if (fin < 0) return;
+    const doc = vue.state.doc, fermeture = doc.lineAt(Math.min(fin + 1, doc.length));
+    if (fermeture.number < doc.lines) {
+      vue.dispatch({ selection: { anchor: doc.line(fermeture.number + 1).from }, scrollIntoView: true });
+    } else {
+      vue.dispatch({ changes: { from: doc.length, insert: '\n' }, selection: { anchor: doc.length + 1 }, scrollIntoView: true, userEvent: 'input' });
+    }
+  }
+
   const extensions = () => [
+    plis,
     historique(),
     EditorView.lineWrapping,
     decorationsCode,
@@ -310,6 +455,7 @@
       if (!u.docChanged) return;
       texteVue = null;
       if (u.transactions.some(t => t.annotation(distant))) return;
+      if (u.transactions.some(t => t.isUserEvent('input.paste'))) setTimeout(sortirDesPlis, 0);
       if (!interne) noterSaisie();
       surSaisie.forEach(f => f());
     }),
@@ -794,12 +940,12 @@
   let interne = false;
 
   // Remplace [debut, fin) : une modification annulable (Ctrl+Z), curseur placé après le texte inséré
-  function remplacer(debut, fin, texte) {
+  function remplacer(debut, fin, texte, evenement = 'input') {
     interne = true;
     vue.dispatch({
       changes: { from: debut, to: fin, insert: texte },
       selection: { anchor: debut + texte.length },
-      userEvent: 'input', scrollIntoView: true,
+      userEvent: evenement, scrollIntoView: true,
     });
     interne = false;
     if (!tactile || vue.hasFocus) vue.focus();
@@ -1096,20 +1242,56 @@
   }
 
   // Insère du texte au curseur (bouton Coller, collage de code) ; le code est entouré de ```
-  function insererTexte(texte) {
+  const estLong = t => t.split('\n').length >= SEUIL_LIGNES || t.length >= SEUIL_CARACTERES;
+  // Journal (log) : lignes datées ou niveaux ERROR / WARN / INFO… ; sinon document
+  function devinerBalise(texte) {
+    const l = texte.split('\n').filter(x => x.trim());
+    const n = l.filter(x => /\b(ERROR|ERREUR|WARN(ING)?|INFO|DEBUG|TRACE|FATAL|Exception|Traceback)\b|^\s*\[?\d{4}-\d{2}-\d{2}[ T]\d{1,2}:\d{2}|^\s*\[?\d{1,2}:\d{2}:\d{2}/.test(x)).length;
+    return n >= Math.max(3, l.length * 0.3) ? 'log' : 'document';
+  }
+  // Le texte inséré occupe ses propres lignes : retour à la ligne avant/après si besoin
+  function entourerCollage(texte, ouvre, ferme) {
+    const v = note.value, d = note.selectionStart, f = note.selectionEnd;
+    const avant = d > 0 && v[d - 1] !== '\n' ? '\n' : '';
+    const apres = f < v.length && v[f] !== '\n' ? '\n' : f >= v.length ? '\n' : '';
+    return `${avant}${ouvre}\n${texte.replace(/\n+$/, '')}\n${ferme}${apres}`;
+  }
+
+  // Insère un texte collé au curseur (collage, bouton Coller) :
+  // du code est entouré de ``` ; un long texte hors bloc demande d'abord un nom de balise
+  async function insererTexte(texte) {
     texte = texte.replace(/\r\n?/g, '\n');
-    const lignes = note.value.split('\n');
+    const lignes = note.value.split('\n'), { estCode } = blocsDeCode(lignes);
     const [i] = pointer(lignes, note.selectionStart);
-    let code = false;
-    if (ressembleACode(texte) && !blocsDeCode(lignes).estCode[i]) {
-      const v = note.value, d = note.selectionStart, f = note.selectionEnd;
-      const avant = d > 0 && v[d - 1] !== '\n' ? '\n' : '';
-      const apres = f < v.length && v[f] !== '\n' ? '\n' : '';
-      texte = `${avant}\`\`\`\n${texte.replace(/\n+$/, '')}\n\`\`\`${apres}`;
-      code = true;
+    const dansCode = estCode[i], dansBalise = balisesDe(lignes, estCode).some(b => i > b.debut && i < b.fin);
+    if (ressembleACode(texte) && !dansCode) {
+      remplacer(note.selectionStart, note.selectionEnd, entourerCollage(texte, '```', '```'), 'input.paste');
+      annoncer('Code détecté : entouré de ``` (bouton </> pour retirer)');
+      return;
     }
-    remplacer(note.selectionStart, note.selectionEnd, texte);
-    if (code) annoncer('Code détecté : entouré de ``` (bouton </> pour retirer)');
+    if (estLong(texte) && !dansCode && !dansBalise) {
+      const debut = note.selectionStart, fin = note.selectionEnd;
+      const n = texte.split('\n').length;
+      const r = await popup({
+        message: `Long texte collé (${n} lignes) : le délimiter par une balise ? Il s'affichera replié.`,
+        valeurChamp: devinerBalise(texte),
+        longueurMax: 30,
+        boutons: [
+          ...SUGGESTIONS_BALISES.map(x => ({ texte: x, valeur: x })),
+          { texte: 'Sans balise', valeur: '__sans' },
+          { texte: 'Annuler', classe: 'annuler', valeur: null },
+          { texte: 'OK', classe: 'principal', valeur: '__ok' },
+        ],
+      });
+      if (!r.valeur) return;
+      await new Promise(ok => setTimeout(ok, 0)); // laisser finir l'événement clavier qui a fermé la fenêtre
+      note.setSelectionRange(debut, fin);
+      if (r.valeur === '__sans') { remplacer(debut, fin, texte, 'input.paste'); return; }
+      const nom = nomBalise(r.valeur === '__ok' ? r.champ : r.valeur) || 'document';
+      remplacer(debut, fin, entourerCollage(texte, `<${nom}>`, `</${nom}>`), 'input.paste');
+      return;
+    }
+    remplacer(note.selectionStart, note.selectionEnd, texte, 'input.paste');
   }
 
   // ---- Images ----
@@ -1420,13 +1602,15 @@
     if (duHtml.length) Promise.all(duHtml.map(versBlob)).then(ajouterImages); // copié depuis cette appli : toutes les images
     else if (fichiers.length) ajouterImages(fichiers);
     if (!texte) { if (duHtml.length || fichiers.length) { e.preventDefault(); return true; } return false; }
-    const lignes = note.value.split('\n');
-    if (ressembleACode(texte) && !blocsDeCode(lignes).estCode[pointer(lignes, note.selectionStart)[0]]) {
+    const lignes = note.value.split('\n'), { estCode } = blocsDeCode(lignes);
+    const [i] = pointer(lignes, note.selectionStart);
+    const dansBalise = balisesDe(lignes, estCode).some(b => i > b.debut && i < b.fin);
+    if ((ressembleACode(texte) || (estLong(texte) && !dansBalise)) && !estCode[i]) {
       e.preventDefault();
       insererTexte(texte);
       return true;
     }
-    return false; // collage normal par l'éditeur
+    return false; // collage normal par l'éditeur (dans un bloc qui deviendra peut-être une vignette)
   }
   function surDepot(e) {
     const fichiers = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));

@@ -32,6 +32,13 @@ GitHub Pages ne sert que des fichiers statiques : la synchronisation passe par u
 - **Modèle** : insère un squelette de prompt avec des titres `##` (Prompt complet : Contexte, Tâche,
   Contraintes, Format de réponse attendu ; Texte à traiter ; Avec exemple). Les titres et balises
   **laissés vides ne sont pas copiés** (Copier indique « n parties vides ignorées »).
+- **Blocs longs repliés** : un bloc `<nom>…</nom>` ou ``` … ``` d'au moins **30 lignes ou
+  3000 caractères** s'affiche en vignette (`📄 log · 342 lignes · 22 Ko`, avec un aperçu), comme
+  les longs collages dans Claude ; toucher pour déplier, « ▴ replier » pour refermer. Le texte reste
+  entier dans la note (synchro, Copier). Coller dans une balise existante replie cette balise ;
+  un long collage hors balise demande un nom (`log` ou `document` proposé selon le contenu ;
+  « Sans balise » colle tel quel) ; un long code est entouré de ``` et replié. Un bloc qui
+  dépasse le seuil pendant qu'on tape dedans reste déplié.
 - **Images** : Ctrl+V d'une capture (Win+Maj+S), glisser-déposer, Coller, ou 🖼 (galerie /
   appareil photo). Vignettes synchronisées ; toucher une vignette : agrandir, copier, supprimer.
 - **Copier** : texte nettoyé (sans éléments de liste vides ni espaces en fin de ligne ; le code est
