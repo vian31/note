@@ -1,5 +1,5 @@
-const CACHE = 'note-v18';
-const FICHIERS = ['./', 'index.html', 'config.js', 'lib/codemirror.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
+const CACHE = 'note-v19';
+const FICHIERS = ['./', 'index.html', 'config.js', 'lib/codemirror-2.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FICHIERS)));
@@ -13,12 +13,14 @@ self.addEventListener('activate', e => {
 });
 
 // Réseau d'abord pour l'application (toujours à jour), cache en secours (hors ligne).
+// « no-cache » : le navigateur revérifie chaque fichier auprès du serveur (réponse 304 si inchangé)
+// au lieu de servir une copie périmée de son propre cache.
 // Les notes elles-mêmes (Firebase, autre origine) ne passent pas par ici.
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: 'no-cache' })
       .then(r => {
         if (r.ok) {
           const copie = r.clone();

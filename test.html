@@ -12,6 +12,30 @@
 <script>
   // Thème choisi dans les réglages, appliqué avant l'affichage (pas de flash)
   try { const t = localStorage.getItem('theme'); if (t === 'clair' || t === 'sombre') document.documentElement.dataset.theme = t; } catch {}
+  // Filet de sécurité : si une erreur bloque l'appli au démarrage (par exemple un fichier resté en
+  // cache d'une version précédente), un bandeau l'explique et propose de tout recharger.
+  const panne = message => {
+    if (window.appliPrete || document.getElementById('panne')) return;
+    const afficher = () => {
+      const d = document.createElement('div');
+      d.id = 'panne';
+      d.style.cssText = 'position:fixed;inset:auto 12px 12px 12px;z-index:99;padding:12px 14px;border-radius:10px;background:#d33;color:#fff;font:15px/1.4 system-ui,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.3)';
+      d.textContent = 'L\'appli n\'a pas pu démarrer (' + (message || 'erreur') + '). ';
+      const b = document.createElement('button');
+      b.textContent = 'Recharger';
+      b.style.cssText = 'margin-left:6px;padding:4px 12px;border:1px solid #fff;border-radius:6px;background:transparent;color:#fff;font:inherit;font-weight:600';
+      b.onclick = async () => {
+        try { for (const k of await caches.keys()) await caches.delete(k); } catch {}
+        try { for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); } catch {}
+        location.reload();
+      };
+      d.append(b);
+      document.body.append(d);
+    };
+    if (document.body) afficher(); else addEventListener('DOMContentLoaded', afficher);
+  };
+  window.addEventListener('error', e => panne(e.message));
+  window.addEventListener('unhandledrejection', e => panne(e.reason && e.reason.message || String(e.reason)));
 </script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <style>
@@ -235,7 +259,7 @@
   </div>
 </div>
 <div id="toast" role="status"></div>
-<script src="lib/codemirror.js"></script>
+<script src="lib/codemirror-2.js"></script>
 <script src="config.js"></script>
 <script>
 (async () => {
@@ -2016,6 +2040,7 @@
   lireNoms();
   onglets.forEach(o => { if (aEnvoyer(o)) envoyer(o); });
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  window.appliPrete = true;
 })();
 </script>
 </body>
