@@ -6,6 +6,9 @@ captures d'écran. Aucune authentification : un lien secret donne accès au bloc
 
 <https://vian31.github.io/note/> — « Ajouter à l'écran d'accueil » pour l'installer.
 
+**Version actuelle : v0.3** (affichée en tête de ⚙ Réglages : vérifier que chaque appareil a la même ;
+sinon, fermer et rouvrir l'appli, ou Ctrl+F5 sur PC).
+
 GitHub Pages ne sert que des fichiers statiques : la synchronisation passe par une
 **Firebase Realtime Database** (gratuite), interrogée directement en REST, sans SDK.
 

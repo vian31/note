@@ -10,6 +10,8 @@
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#ffffff">
 <script>
+  // Version de l'appli : affichée dans ⚙ Réglages (vérifier que tous les appareils ont la même)
+  window.VERSION_NOTE = 'v0.3';
   // Thème choisi dans les réglages, appliqué avant l'affichage (pas de flash)
   try { const t = localStorage.getItem('theme'); if (t === 'clair' || t === 'sombre') document.documentElement.dataset.theme = t; } catch {}
   // Filet de sécurité : si une erreur bloque l'appli au démarrage (par exemple un fichier resté en
@@ -20,7 +22,7 @@
       const d = document.createElement('div');
       d.id = 'panne';
       d.style.cssText = 'position:fixed;inset:auto 12px 12px 12px;z-index:99;padding:12px 14px;border-radius:10px;background:#d33;color:#fff;font:15px/1.4 system-ui,sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.3)';
-      d.textContent = 'L\'appli n\'a pas pu démarrer (' + (message || 'erreur') + '). ';
+      d.textContent = 'Note ' + window.VERSION_NOTE + ' : l\'appli n\'a pas pu démarrer (' + (message || 'erreur') + '). ';
       const b = document.createElement('button');
       b.textContent = 'Recharger';
       b.style.cssText = 'margin-left:6px;padding:4px 12px;border:1px solid #fff;border-radius:6px;background:transparent;color:#fff;font:inherit;font-weight:600';
@@ -222,7 +224,7 @@
   <button role="tab">1</button>
   <button role="tab">2</button>
   <button role="tab">3</button>
-  <button id="reglages" title="Réglages : lien secret, nettoyage" aria-label="Réglages">⚙</button>
+  <button id="reglages" title="Réglages : version, thème, lien secret, nettoyage" aria-label="Réglages">⚙</button>
   <span id="etat" title="Synchronisation"></span>
 </div>
 <div id="zone"></div>
@@ -1996,7 +1998,7 @@
 
   document.getElementById('reglages').onclick = async () => {
     const r = await popup({
-      message: 'Lien secret de ce bloc-notes, à ouvrir sur vos autres appareils. Toute personne qui l\'a peut lire et modifier les notes.',
+      message: `Note ${window.VERSION_NOTE}${ESPACE ? ' (page de test)' : ''} — Lien secret de ce bloc-notes, à ouvrir sur vos autres appareils. Toute personne qui l'a peut lire et modifier les notes.`,
       valeurChamp: lienSecret(cle),
       boutons: [
         { texte: `Thème : ${{ auto: 'auto', clair: 'clair', sombre: 'sombre' }[themeActuel()]}`, valeur: 'theme' },

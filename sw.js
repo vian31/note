@@ -1,4 +1,4 @@
-const CACHE = 'note-v19';
+const CACHE = 'note-v0.3';
 const FICHIERS = ['./', 'index.html', 'config.js', 'lib/codemirror-2.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
