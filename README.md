@@ -12,8 +12,9 @@ GitHub Pages ne sert que des fichiers statiques : la synchronisation passe par u
 ## Utilisation
 
 - **Onglets** : trois notes ; toucher l'onglet affiché pour le renommer.
-- **Barre** : `•` `1.` `</>` `🖼` Effacer Copier Coller ; ⚙ réglages et point d'état en haut.
-  Sur PC, colonne centrée, mise en forme à gauche et actions à droite.
+- **Barre** : mise en forme `•` `1.` `</>` `🖼` Balise Modèle, puis actions Effacer Copier Coller
+  (deux rangées sur téléphone, une seule à gauche/droite sur PC) ; ⚙ réglages et point d'état
+  en haut. Sur PC, colonne centrée.
 - **Listes** : `- ` et `1. ` (texte brut Markdown, que Claude comprend). Deux niveaux au plus :
   1er appui sur `1.` → `1.`, 2e → `a)`, 3e → plus de liste (idem `•` → `-`, `•`, rien).
   Entrée continue la liste (numéro suivant) ; Entrée sur un élément vide en sort ; Tab / Maj+Tab
@@ -23,6 +24,13 @@ GitHub Pages ne sert que des fichiers statiques : la synchronisation passe par u
 - **Code** : bouton `</>` (balises ``` autour de la sélection ou de la ligne ; dans un bloc, les
   retire) et détection automatique au collage. Affiché plus petit, en police à chasse fixe et en
   couleur ; pas de listes automatiques dans le code ; Tab insère 2 espaces, Entrée garde le retrait.
+- **Balise** : entoure la sélection (ou la ligne) de `<nom>…</nom>` : un nom à taper ou une
+  suggestion (document, exemple, contexte, log, email). Sert à délimiter un texte collé (document,
+  log, e-mail…) pour qu'il ne soit pas confondu avec vos consignes. Dans une balise, le bouton
+  propose aussi de la retirer. Les balises s'affichent en violet.
+- **Modèle** : insère un squelette de prompt avec des titres `##` (Prompt complet : Contexte, Tâche,
+  Contraintes, Format de réponse attendu ; Texte à traiter ; Avec exemple). Les titres et balises
+  **laissés vides ne sont pas copiés** (Copier indique « n parties vides ignorées »).
 - **Images** : Ctrl+V d'une capture (Win+Maj+S), glisser-déposer, Coller, ou 🖼 (galerie /
   appareil photo). Vignettes synchronisées ; toucher une vignette : agrandir, copier, supprimer.
 - **Copier** : texte nettoyé (sans éléments de liste vides ni espaces en fin de ligne ; le code est

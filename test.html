@@ -21,6 +21,7 @@
     --fond: #fff; --texte: #111; --bord: #e5e5e5; --bouton: #e8ecf2; --bord-bouton: #c3ccd8; --appui: #d5dce6; --voile: rgba(0,0,0,.35);
     --accent: #2563c9; --sur-accent: #fff;
     --code: #f3f5f8; --code-cloture: #e7ebf1; --code-bord: #8a9bb5; --exterieur: #eceff4; --code-texte: #0b6584; --code-balise: #8792a5;
+    --tag-fond: #f6f1fb; --tag-bord: #a98bd0; --tag-texte: #6b3fa0;
   }
   /* Thème : automatique (réglage du téléphone / PC), ou forcé dans ⚙ Réglages */
   @media (prefers-color-scheme: dark) {
@@ -29,6 +30,7 @@
       --fond: #111; --texte: #eee; --bord: #333; --bouton: #2a313c; --bord-bouton: #46505f; --appui: #3a4351; --voile: rgba(0,0,0,.6);
       --accent: #4b8bf0; --sur-accent: #fff;
       --code: #1b2029; --code-cloture: #232a35; --code-bord: #5d7091; --exterieur: #070707; --code-texte: #7cc7e6; --code-balise: #6c778a;
+      --tag-fond: #251e31; --tag-bord: #8a6bb8; --tag-texte: #c4a3f0;
     }
   }
   :root[data-theme="sombre"] {
@@ -36,6 +38,7 @@
     --fond: #111; --texte: #eee; --bord: #333; --bouton: #2a313c; --bord-bouton: #46505f; --appui: #3a4351; --voile: rgba(0,0,0,.6);
     --accent: #4b8bf0; --sur-accent: #fff;
     --code: #1b2029; --code-cloture: #232a35; --code-bord: #5d7091; --exterieur: #070707; --code-texte: #7cc7e6; --code-balise: #6c778a;
+      --tag-fond: #251e31; --tag-bord: #8a6bb8; --tag-texte: #c4a3f0;
   }
   html, body { margin: 0; height: 100%; overflow: hidden; background: var(--fond); color: var(--texte); }
   body { display: flex; flex-direction: column; font: 18px/1.5 system-ui, sans-serif; }
@@ -63,6 +66,10 @@
     background: var(--code); color: var(--code-texte);
   }
   #zone .cm-cloture { background: var(--code-cloture); color: var(--code-balise); }
+  /* Balises <nom>…</nom> (violet) et titres (## …) */
+  #zone .cm-dans-balise { padding-left: 13px; border-left: 3px solid var(--tag-bord); background: var(--tag-fond); }
+  #zone .cm-balise { color: var(--tag-texte); font-weight: 600; }
+  #zone .cm-titre { font-weight: 700; }
   #zone .cm-content ::selection, #zone .cm-content::selection { background: rgba(37, 99, 201, .3); }
 
   /* Vignettes des images de l'onglet */
@@ -84,18 +91,15 @@
   #images .erreur::after { content: '↻'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 24px; color: #d33; }
   @keyframes tourne { to { transform: rotate(360deg); } }
 
+  /* Barre : mise en forme (1re rangée) et actions (2e rangée) ; sur PC, tout sur une ligne */
   nav {
-    display: flex; gap: 5px; padding: 8px 10px max(8px, env(safe-area-inset-bottom));
-    align-items: center; border-top: 1px solid var(--bord); font-size: 16px;
+    display: flex; flex-direction: column; gap: 6px; padding: 8px 8px max(8px, env(safe-area-inset-bottom));
+    border-top: 1px solid var(--bord); font-size: 16px;
   }
-  nav button { flex: 1 1 auto; min-width: 0; }
-  nav .format:not(#coller) { flex: 0 1 auto; min-width: 36px; }
-  /* petits écrans : barre resserrée pour que les 7 boutons et leurs libellés tiennent */
-  @media (max-width: 400px) {
-    nav { gap: 4px; padding-left: 6px; padding-right: 6px; font-size: 15px; }
-    nav button { padding: 7px 5px; }
-    nav .format:not(#coller) { min-width: 30px; }
-  }
+  nav .fmt, nav .act { display: flex; gap: 5px; width: 100%; }
+  nav button { flex: 1 1 0; min-width: 0; padding: 7px 6px; white-space: nowrap; }
+  nav .fmt .petit { flex: 0 0 auto; min-width: 40px; }
+  @media (max-width: 340px) { nav { font-size: 14px; } nav button { padding: 6px 3px; } nav .fmt .petit { min-width: 32px; } }
   /* Grand écran (PC) : colonne centrée façon feuille, boutons à leur taille naturelle,
      mise en forme à gauche et actions à droite */
   @media (min-width: 700px) {
@@ -105,23 +109,18 @@
       background: var(--fond); border-left: 1px solid var(--bord); border-right: 1px solid var(--bord);
     }
     #zone { flex: 1; }
-    nav { gap: 8px; padding: 10px 16px max(10px, env(safe-area-inset-bottom)); }
-    nav button, nav .format:not(#coller) { flex: 0 0 auto; min-width: 0; padding: 7px 14px; }
-    nav .format:not(#coller) { min-width: 42px; padding: 7px 10px; }
-    #effacer { margin-left: auto; }
+    nav { flex-direction: row; align-items: center; gap: 8px; padding: 10px 16px max(10px, env(safe-area-inset-bottom)); }
+    nav .fmt, nav .act { width: auto; gap: 8px; }
+    nav .act { margin-left: auto; }
+    nav button, nav .fmt .petit { flex: 0 0 auto; min-width: 0; padding: 7px 14px; }
+    nav .fmt .petit { min-width: 42px; padding: 7px 10px; }
     #copier { min-width: 110px; }
-  }
-  @media (max-width: 340px) {
-    nav { gap: 3px; padding-left: 4px; padding-right: 4px; font-size: 13px; }
-    nav button { padding: 6px 4px; }
-    nav .format:not(#coller) { min-width: 26px; }
   }
   button {
     font: inherit; padding: 8px 10px; border: 1px solid var(--bord-bouton); border-radius: 8px;
     background: var(--bouton); color: inherit; cursor: pointer;
   }
   #copier { background: var(--accent); border-color: var(--accent); color: var(--sur-accent); font-weight: 600; }
-  nav button { padding: 7px 8px; white-space: nowrap; }
   button:active { background: var(--appui); }
 
 
@@ -178,14 +177,20 @@
 <div id="zone"></div>
 <div id="images" hidden></div>
 <nav>
-  <button id="puces" class="format" title="Liste à puces (encore : sous-niveau)" aria-label="Liste à puces">•</button>
-  <button id="numeros" class="format" title="Liste numérotée (encore : sous-niveau)" aria-label="Liste numérotée">1.</button>
-  <button id="code" class="format" title="Bloc de code" aria-label="Bloc de code">&lt;/&gt;</button>
-  <button id="image" class="format" title="Insérer une image (galerie, appareil photo)" aria-label="Insérer une image">🖼</button>
-  <input id="fichier" type="file" accept="image/*" multiple hidden>
-  <button id="effacer">Effacer</button>
-  <button id="copier">Copier</button>
-  <button id="coller" class="format">Coller</button>
+  <div class="fmt">
+    <button id="puces" class="format petit" title="Liste à puces (encore : sous-niveau)" aria-label="Liste à puces">•</button>
+    <button id="numeros" class="format petit" title="Liste numérotée (encore : sous-niveau)" aria-label="Liste numérotée">1.</button>
+    <button id="code" class="format petit" title="Bloc de code" aria-label="Bloc de code">&lt;/&gt;</button>
+    <button id="image" class="format petit" title="Insérer une image (galerie, appareil photo)" aria-label="Insérer une image">🖼</button>
+    <button id="balise" class="format" title="Entourer d'une balise <nom>…</nom>" aria-label="Balise">Balise</button>
+    <button id="modele" class="format" title="Insérer un modèle de prompt" aria-label="Modèle">Modèle</button>
+    <input id="fichier" type="file" accept="image/*" multiple hidden>
+  </div>
+  <div class="act">
+    <button id="effacer">Effacer</button>
+    <button id="copier">Copier</button>
+    <button id="coller" class="format">Coller</button>
+  </div>
 </nav>
 <div id="visionneuse" hidden role="dialog" aria-modal="true">
   <img id="grande" alt="">
@@ -227,16 +232,42 @@
   const historique = CM.history; // (« history » est déjà l'historique du navigateur)
   const distant = Annotation.define(); // modification venue d'un autre appareil (pas un geste ici)
   const CLOTURE = /^\s*```/;          // ligne d'ouverture ou de fermeture d'un bloc de code
+  const BALISE_OUVRE = /^<([A-Za-z][\w-]*)>\s*$/, BALISE_FERME = /^<\/([A-Za-z][\w-]*)>\s*$/;
+  const TITRE = /^#{1,6}\s+\S/;       // titre Markdown (« ## Contexte »)
   const surSaisie = [];                // appelés après chaque modification faite ici
   let texteVue = null;                 // texte en cache (recalculé après une modification)
 
-  const decoCode = Decoration.line({ class: 'cm-code' }), decoCloture = Decoration.line({ class: 'cm-cloture' });
+  // Blocs <nom> … </nom> : lignes seules, hors blocs de code ; les balises sont appariées comme des parenthèses
+  function balisesDe(lignes, estCode) {
+    const pile = [], blocs = [];
+    lignes.forEach((l, i) => {
+      if (estCode[i]) return;
+      let m = BALISE_OUVRE.exec(l);
+      if (m) { pile.push({ nom: m[1], debut: i }); return; }
+      m = BALISE_FERME.exec(l);
+      if (!m) return;
+      for (let k = pile.length - 1; k >= 0; k--) {
+        if (pile[k].nom !== m[1]) continue;
+        const ouvert = pile.splice(k)[0];
+        blocs.push({ nom: ouvert.nom, debut: ouvert.debut, fin: i });
+        break;
+      }
+    });
+    return blocs;
+  }
+
+  const decorations = new Map(); // une décoration par combinaison de classes
+  const decoDe = c => { if (!decorations.has(c)) decorations.set(c, Decoration.line({ class: c })); return decorations.get(c); };
   function decorerCode(state) {
     const lignes = state.doc.toString().split('\n'), { estCode } = blocsDeCode(lignes);
+    const classes = lignes.map((l, i) => estCode[i] ? (CLOTURE.test(l) ? 'cm-cloture' : 'cm-code') : TITRE.test(l) ? 'cm-titre' : '');
+    balisesDe(lignes, estCode).forEach(({ debut, fin }) => {
+      for (let i = debut; i <= fin; i++) if (!estCode[i]) classes[i] = (classes[i] + ' cm-dans-balise' + (i === debut || i === fin ? ' cm-balise' : '')).trim();
+    });
     const b = new RangeSetBuilder();
     let pos = 0;
     lignes.forEach((l, i) => {
-      if (estCode[i]) b.add(pos, pos, CLOTURE.test(l) ? decoCloture : decoCode);
+      if (classes[i]) b.add(pos, pos, decoDe(classes[i]));
       pos += l.length + 1;
     });
     return b.finish();
@@ -330,7 +361,8 @@
         b.onclick = () => fermer(valeur);
         zone.append(b);
       });
-      champ.onkeydown = e => { if (e.key === 'Enter') fermer(boutons[boutons.length - 1].valeur); };
+      // Entrée valide la fenêtre ; la frappe ne doit pas continuer vers l'éditeur qui reprend le focus
+      champ.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); fermer(boutons[boutons.length - 1].valeur); } };
       if (fermable) {
         voile.onclick = e => { if (e.target === voile) fermer(null); };
         document.onkeydown = e => { if (e.key === 'Escape') fermer(null); };
@@ -1374,6 +1406,92 @@
   document.getElementById('numeros').onclick = () => boutonListe('numero');
   document.getElementById('code').onclick = basculerCode;
 
+  // ---- Balise <nom>…</nom> ----
+  // Entoure la sélection (ou la ligne) d'une balise : elle dit à Claude où commence et où finit
+  // un texte collé (document, log, exemple…), sans le confondre avec les consignes.
+  const SUGGESTIONS_BALISES = ['document', 'exemple', 'contexte', 'log', 'email'];
+  const nomBalise = t => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '_').replace(/^[^a-z]+|_+$/g, '');
+
+  async function boutonBalise() {
+    const lignes = note.value.split('\n'), { estCode } = blocsDeCode(lignes);
+    const debut = note.selectionStart, fin = note.selectionEnd;
+    const [i0] = pointer(lignes, debut);
+    const dans = balisesDe(lignes, estCode).filter(b => i0 >= b.debut && i0 <= b.fin).sort((a, b) => b.debut - a.debut)[0];
+    const r = await popup({
+      message: 'Balise autour de la sélection (ou de la ligne). Choisir un nom, ou en taper un :',
+      valeurChamp: '',
+      longueurMax: 30,
+      boutons: [
+        { texte: 'Annuler', valeur: null },
+        ...SUGGESTIONS_BALISES.map(n => ({ texte: n, valeur: n })),
+        ...(dans ? [{ texte: `Retirer <${dans.nom}>`, classe: 'danger', valeur: '__retirer' }] : []),
+        { texte: 'OK', classe: 'principal', valeur: '__ok' },
+      ],
+    });
+    if (!r.valeur) return;
+    await new Promise(ok => setTimeout(ok, 0)); // laisser finir l'événement clavier qui a fermé la fenêtre
+    note.setSelectionRange(debut, fin);
+    if (r.valeur === '__retirer') { retirerBalise(dans); return; }
+    const nom = nomBalise(r.valeur === '__ok' ? r.champ : r.valeur);
+    if (!nom) { if (r.valeur === '__ok') annoncer('Nom de balise invalide'); return; }
+    entourerLignes(`<${nom}>`, `</${nom}>`);
+  }
+
+  // Entoure les lignes de la sélection (ou la ligne du curseur) ; sur une ligne vide, un bloc à remplir
+  function entourerLignes(ouvre, ferme) {
+    const lignes = note.value.split('\n');
+    const [i0] = pointer(lignes, note.selectionStart);
+    let [i1, col1] = pointer(lignes, note.selectionEnd);
+    if (note.selectionEnd > note.selectionStart && col1 === 0 && i1 > i0) i1--;
+    if (i0 === i1 && !lignes[i0].trim()) {
+      lignes.splice(i0, 1, ouvre, '', ferme);
+      const c = decalageDe(lignes, i0 + 1, 0);
+      appliquer(lignes, c, c);
+      return;
+    }
+    lignes.splice(i1 + 1, 0, ferme);
+    lignes.splice(i0, 0, ouvre);
+    appliquer(lignes, decalageDe(lignes, i0 + 1, 0), decalageDe(lignes, i1 + 1, lignes[i1 + 1].length));
+  }
+
+  function retirerBalise(bloc) {
+    const lignes = note.value.split('\n'), pos = note.selectionStart;
+    const debutBloc = decalageDe(lignes, bloc.debut, 0);
+    const curseur = Math.max(debutBloc, pos - (pos > debutBloc ? lignes[bloc.debut].length + 1 : 0));
+    lignes.splice(bloc.fin, 1);
+    lignes.splice(bloc.debut, 1);
+    appliquer(lignes, curseur, curseur);
+    annoncer(`Balise <${bloc.nom}> retirée`);
+  }
+
+  // ---- Modèles de prompt ----
+  // Un titre « ## … » par partie ; les parties laissées vides ne sont pas copiées (voir propre)
+  const MODELES = [
+    { nom: 'Prompt complet', texte: '## Contexte\n\n\n## Tâche\n\n\n## Contraintes\n- \n\n## Format de réponse attendu\n' },
+    { nom: 'Texte à traiter', texte: '## Tâche\n\n\n<document>\n\n</document>\n\n## Format de réponse attendu\n' },
+    { nom: 'Avec exemple', texte: '## Tâche\n\n\n<exemple>\n\n</exemple>\n\n## Format de réponse attendu\n' },
+  ];
+
+  async function boutonModele() {
+    const r = await popup({
+      message: 'Insérer un modèle de prompt (les parties laissées vides ne sont pas copiées) :',
+      boutons: [{ texte: 'Annuler', valeur: null }, ...MODELES.map((m, i) => ({ texte: m.nom, valeur: i }))],
+    });
+    if (r.valeur === null || r.valeur === undefined) return;
+    const m = MODELES[r.valeur], v = note.value;
+    const pos = note.selectionEnd;
+    // une ligne vide avant et après le modèle
+    const avant = pos === 0 || !v.slice(0, pos).trim() ? '' : v[pos - 1] !== '\n' ? '\n\n' : pos >= 2 && v[pos - 2] !== '\n' ? '\n' : '';
+    const apres = pos >= v.length || v[pos] === '\n' && !v.slice(pos).trim() ? '' : v[pos] !== '\n' ? '\n' : '';
+    const debut = !v.trim() ? 0 : pos, fin = !v.trim() ? v.length : pos;
+    remplacer(debut, fin, avant + m.texte + apres);
+    const c = debut + avant.length + m.texte.indexOf('\n') + 1; // 1re ligne vide, sous le 1er titre
+    note.setSelectionRange(c, c);
+  }
+  document.getElementById('balise').onclick = boutonBalise;
+  document.getElementById('modele').onclick = boutonModele;
+
   // 🖼 : choisir des images dans la galerie (ou prendre une photo) — sur téléphone, les captures
   // d'écran ne passent pas par le presse-papiers
   const choixFichier = document.getElementById('fichier');
@@ -1385,11 +1503,39 @@
   };
 
   // Texte copié : sans éléments de liste vides ni espaces en fin de ligne (le code est laissé tel quel)
-  function propre(texte) {
+  function nettoyer(texte) {
     const lignes = texte.split('\n'), { estCode } = blocsDeCode(lignes);
-    return lignes.filter((l, i) => estCode[i] || !ITEM_VIDE.test(l))
-      .map((l, i) => l.replace(/[ \t]+$/, '')).join('\n').replace(/^\s*\n|\s+$/g, '');
+    let l = lignes.map((t, i) => ({ t, code: estCode[i] })).filter(x => x.code || !ITEM_VIDE.test(x.t));
+    const blanc = x => !x.code && !x.t.trim();
+    let retires = 0;
+    // balises sans contenu : <nom> </nom> (de bas en haut, pour les balises imbriquées)
+    for (let k = l.length - 1; k >= 0; k--) {
+      const m = !l[k].code && BALISE_OUVRE.exec(l[k].t);
+      if (!m) continue;
+      let j = k + 1;
+      while (j < l.length && blanc(l[j])) j++;
+      const f = j < l.length && !l[j].code && BALISE_FERME.exec(l[j].t);
+      if (f && f[1] === m[1]) { l.splice(k, j - k + 1); retires++; }
+    }
+    // titres dont la partie est vide (jusqu'au titre suivant de même niveau ou supérieur)
+    const niveau = x => !x.code && TITRE.test(x.t) ? /^#+/.exec(x.t)[0].length : 0;
+    for (let k = l.length - 1; k >= 0; k--) {
+      const n = niveau(l[k]);
+      if (!n) continue;
+      let j = k + 1;
+      while (j < l.length && !(niveau(l[j]) && niveau(l[j]) <= n)) j++;
+      if (l.slice(k + 1, j).every(blanc)) { l.splice(k, j - k); retires++; }
+    }
+    // espaces en fin de ligne, et jamais plus d'une ligne vide de suite
+    const sortie = [];
+    l.forEach(x => {
+      const t = x.t.replace(/[ \t]+$/, '');
+      if (blanc(x) && (!sortie.length || !sortie[sortie.length - 1].trim())) return;
+      sortie.push(t);
+    });
+    return { texte: sortie.join('\n').replace(/\s+$/, ''), retires };
   }
+  const propre = texte => nettoyer(texte).texte;
 
   async function copier(texte) {
     try {
@@ -1457,11 +1603,12 @@
 
   boutonCopier.onclick = async () => {
     if (suite) return copierImageSuivante();
-    const o = actif, texte = propre(note.value), images = imagesPretes(o);
+    const o = actif, { texte, retires } = nettoyer(note.value), images = imagesPretes(o);
     const attendues = o.images.length + o.locales.length;
     if (!images.length) {
       await copier(texte);
-      annoncer(attendues ? 'Images pas encore téléchargées : texte copié seul' : texte ? 'Copié ✓' : 'Note vide');
+      annoncer(attendues ? 'Images pas encore téléchargées : texte copié seul'
+        : texte ? `Copié ✓${retires ? ` · ${retires} partie${retires > 1 ? 's' : ''} vide${retires > 1 ? 's' : ''} ignorée${retires > 1 ? 's' : ''}` : ''}` : 'Note vide');
       return;
     }
     if (tactile && peutPartagerFichiers) {
