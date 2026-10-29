@@ -281,7 +281,9 @@
       { key: 'Backspace', run: () => toucheRetourArriere() },
       ...historyKeymap, ...defaultKeymap,
     ]),
-    EditorView.contentAttributes.of({ spellcheck: 'false', 'aria-label': 'Note' }),
+    // Majuscule automatique (début de phrase) et correction du clavier, comme une zone de texte
+    // normale : CodeMirror les désactive par défaut (pensé pour le code)
+    EditorView.contentAttributes.of({ spellcheck: 'false', autocapitalize: 'sentences', autocorrect: 'on', 'aria-label': 'Note' }),
     EditorView.domEventHandlers({
       paste: e => surCollage(e),
       dragover: e => { if ([...e.dataTransfer.types].includes('Files')) e.preventDefault(); return false; },
