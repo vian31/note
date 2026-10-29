@@ -26,8 +26,9 @@ GitHub Pages ne sert que des fichiers statiques : la synchronisation passe par u
   couleur ; pas de listes automatiques dans le code ; Tab insère 2 espaces, Entrée garde le retrait.
 - **Balise** : entoure la sélection (ou la ligne) de `<nom>…</nom>` : un nom à taper ou une
   suggestion (document, exemple, contexte, log, email). Sert à délimiter un texte collé (document,
-  log, e-mail…) pour qu'il ne soit pas confondu avec vos consignes. Dans une balise, le bouton
-  propose aussi de la retirer. Les balises s'affichent en violet.
+  log, e-mail…) pour qu'il ne soit pas confondu avec vos consignes. Une ligne vide est ajoutée après
+  la balise fermante pour enchaîner. Dans une balise, le bouton propose aussi de la retirer.
+  Les balises s'affichent en violet.
 - **Modèle** : insère un squelette de prompt avec des titres `##` (Prompt complet : Contexte, Tâche,
   Contraintes, Format de réponse attendu ; Texte à traiter ; Avec exemple). Les titres et balises
   **laissés vides ne sont pas copiés** (Copier indique « n parties vides ignorées »).
@@ -36,9 +37,13 @@ GitHub Pages ne sert que des fichiers statiques : la synchronisation passe par u
 - **Copier** : texte nettoyé (sans éléments de liste vides ni espaces en fin de ligne ; le code est
   laissé tel quel). Avec des images, en plusieurs fois, car Claude ne prend qu'un contenu à la fois
   dans le presse-papiers : le texte, puis le bouton devient `🖼 1/2`, `🖼 2/2`… et chaque appui
-  copie l'image suivante. Sur téléphone, **Partager tout** envoie texte et images d'un coup.
+  copie l'image suivante. Sur téléphone, **Partager tout** envoie texte et images d'un coup vers
+  l'appli Claude (Claude Code n'apparaît pas dans le partage : utiliser Une par une).
 - **Coller** : texte au curseur, images ajoutées à l'onglet.
-- **Effacer** : texte et images de l'onglet, sur tous les appareils.
+- **Effacer** : texte et images de l'onglet, sur tous les appareils. Un appui demande confirmation,
+  un **double appui** efface tout de suite ; dans les deux cas, **Annuler** (5 s) rend tout.
+- **Croix** sur chaque vignette : supprime l'image tout de suite (Annuler pendant 5 s).
+- **Fenêtres** : Annuler en rouge juste avant OK (bleu).
 - **Réglages ⚙** : thème (auto, clair, sombre), lien secret, **Supprimer les images** (toutes,
   texte conservé), **Tout effacer** (notes, noms et images du bloc-notes).
 

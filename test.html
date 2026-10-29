@@ -82,6 +82,12 @@
     border-radius: 8px; background: var(--appui);
   }
   #images img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  /* Croix de suppression directe sur chaque vignette */
+  #images .croix {
+    position: absolute; top: 2px; right: 2px; z-index: 1; width: 22px; height: 22px; border-radius: 50%;
+    display: grid; place-items: center; font-size: 15px; line-height: 1;
+    background: rgba(0, 0, 0, .65); color: #fff; cursor: pointer;
+  }
   #images .envoi img { opacity: .45; }
   #images .envoi::after {
     content: ''; position: absolute; inset: 22px; border: 3px solid var(--texte); border-right-color: transparent;
@@ -122,6 +128,7 @@
   }
   #copier { background: var(--accent); border-color: var(--accent); color: var(--sur-accent); font-weight: 600; }
   button:active { background: var(--appui); }
+  button { touch-action: manipulation; } /* pas de zoom sur un double appui */
 
 
   /* Visionneuse d'image */
@@ -153,9 +160,12 @@
     border: 1px solid var(--bord); border-radius: 8px; background: var(--appui); color: inherit;
   }
   #popup input[hidden] { display: none; }
-  #boutons { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
-  #popup .danger { background: #d33; border-color: #d33; color: #fff; }
-  #popup .principal { background: var(--texte); border-color: var(--texte); color: var(--fond); }
+  #boutons { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+  #popup button { padding: 6px 12px; font-size: 15px; }
+  /* Annuler en rouge juste avant OK (bleu) ; action risquée : contour rouge */
+  #popup .annuler { background: #d33; border-color: #d33; color: #fff; }
+  #popup .principal { background: var(--accent); border-color: var(--accent); color: var(--sur-accent); }
+  #popup .danger { background: transparent; border-color: #d33; color: #d33; }
 
   #toast {
     position: fixed; left: 50%; bottom: 72px; transform: translateX(-50%); z-index: 10;
@@ -164,6 +174,8 @@
     opacity: 0; transition: opacity .2s; pointer-events: none;
   }
   #toast.visible { opacity: 1; }
+  #toast.avec-action { pointer-events: auto; display: flex; align-items: center; gap: 12px; }
+  #toast button { padding: 4px 10px; font-size: 15px; background: transparent; color: inherit; border-color: currentColor; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -372,11 +384,20 @@
   }
 
   const toast = document.getElementById('toast');
-  function annoncer(message) {
+  function annoncer(message, action) {
     toast.textContent = message;
+    toast.classList.toggle('avec-action', !!action);
+    if (action) {
+      const b = document.createElement('button');
+      b.textContent = action.texte;
+      b.addEventListener('mousedown', e => e.preventDefault());
+      b.onclick = () => { toast.classList.remove('visible', 'avec-action'); action.faire(); };
+      toast.append(b);
+    }
     toast.classList.add('visible');
     clearTimeout(toast.minuteur);
-    toast.minuteur = setTimeout(() => toast.classList.remove('visible'), Math.max(1500, message.length * 55));
+    toast.minuteur = setTimeout(() => toast.classList.remove('visible', 'avec-action'),
+      action ? action.duree : Math.max(1500, message.length * 55));
   }
 
   // Clé secrète : dans l'adresse (#…), sinon mémorisée sur l'appareil
@@ -457,6 +478,7 @@
       images: lireIndexLocal(cache),   // images de l'onglet (index synchronisé)
       etagIndex: null,
       locales: [],                     // images ajoutées ici, en cours d'envoi
+      masquees: new Set(),             // images supprimées il y a moins de 5 s (encore annulable)
       numero: nom,
       nom: stock.lire(`${cache}:nom`) || '',
       nomAEnvoyer: stock.lire(`${cache}:nom-a-envoyer`) === '1',
@@ -727,7 +749,7 @@
       message: `Nom de l'onglet ${o.numero} (vide = « ${o.numero} »)`,
       valeurChamp: o.nom,
       longueurMax: 20,
-      boutons: [{ texte: 'Annuler', valeur: false }, { texte: 'Renommer', classe: 'principal', valeur: true }],
+      boutons: [{ texte: 'Annuler', classe: 'annuler', valeur: false }, { texte: 'Renommer', classe: 'principal', valeur: true }],
     });
     if (!r.valeur) return;
     const nom = r.champ.slice(0, 20).trim();
@@ -1169,13 +1191,21 @@
   }
 
   function afficherImages() {
-    const o = actif, liste = [...o.images.map(x => ({ ...x, statut: 'ok' })), ...o.locales];
+    const o = actif, liste = [...o.images.map(x => ({ ...x, statut: 'ok' })), ...o.locales].filter(x => !o.masquees.has(x.id));
     zoneImages.hidden = !liste.length;
     zoneImages.replaceChildren(...liste.map(x => {
       const b = document.createElement('button');
       b.className = x.statut === 'ok' ? '' : x.statut === 'erreur' ? 'erreur' : 'envoi';
       b.title = x.statut === 'erreur' ? 'Envoi impossible : toucher pour réessayer' : 'Voir l\'image';
       if (x.mini) { const img = document.createElement('img'); img.src = x.mini; img.alt = ''; b.append(img); }
+      const croix = document.createElement('span');
+      croix.className = 'croix';
+      croix.textContent = '×';
+      croix.title = 'Supprimer l\'image';
+      croix.setAttribute('role', 'button');
+      croix.setAttribute('aria-label', 'Supprimer l\'image');
+      croix.onclick = e => { e.stopPropagation(); supprimerImagesDiffere(o, [x.id], 'Image supprimée'); };
+      b.append(croix);
       b.addEventListener('mousedown', e => e.preventDefault());
       b.onclick = () => x.statut === 'erreur' ? televerser(o, x) : ouvrirImage(o, x.id);
       return b;
@@ -1310,16 +1340,43 @@
   }
 
   // Images de l'onglet prêtes à être copiées (dans l'ordre d'affichage)
-  const imagesPretes = o => [...o.images, ...o.locales].map(x => imagesCompletes.get(x.id)).filter(Boolean);
+  const imagesPretes = o => [...o.images, ...o.locales].filter(x => !o.masquees.has(x.id)).map(x => imagesCompletes.get(x.id)).filter(Boolean);
 
-  async function supprimerImage(o, id) {
-    const local = o.locales.find(x => x.id === id);
-    if (local) { local.supprimee = true; o.locales = o.locales.filter(x => x !== local); }
-    else await modifierIndex(o, liste => liste.filter(x => x.id !== id));
-    fetch(urlImage(id), { method: 'PUT', body: 'null' }).catch(() => {});
-    imagesCompletes.delete(id);
-    idb.effacer(id);
+  async function supprimerImages(o, ids) {
+    const locales = o.locales.filter(x => ids.includes(x.id));
+    locales.forEach(x => { x.supprimee = true; });
+    o.locales = o.locales.filter(x => !ids.includes(x.id));
+    if (o.images.some(x => ids.includes(x.id))) await modifierIndex(o, liste => liste.filter(x => !ids.includes(x.id)));
+    ids.forEach(id => {
+      fetch(urlImage(id), { method: 'PUT', body: 'null' }).catch(() => {});
+      imagesCompletes.delete(id);
+      idb.effacer(id);
+    });
     if (o === actif) afficherImages();
+  }
+  const supprimerImage = (o, id) => supprimerImages(o, [id]);
+
+  // Suppression sans confirmation : les images disparaissent aussitôt, mais ne sont supprimées
+  // pour de bon qu'au bout de 5 s ; « Annuler » les fait revenir.
+  const DELAI_ANNULER = 5000;
+  function supprimerImagesDiffere(o, ids, message, annulerAussi) {
+    if (!ids.length) { if (message) annoncer(message, annulerAussi && { texte: 'Annuler', duree: DELAI_ANNULER, faire: annulerAussi }); return; }
+    ids.forEach(id => o.masquees.add(id));
+    if (o === actif) afficherImages();
+    const minuteur = setTimeout(async () => {
+      try { await supprimerImages(o, ids); } catch { annoncer('Images : suppression impossible (réseau)'); }
+      ids.forEach(id => o.masquees.delete(id));
+      if (o === actif) afficherImages();
+    }, DELAI_ANNULER);
+    annoncer(message, {
+      texte: 'Annuler', duree: DELAI_ANNULER,
+      faire: () => {
+        clearTimeout(minuteur);
+        ids.forEach(id => o.masquees.delete(id));
+        if (o === actif) afficherImages();
+        if (annulerAussi) annulerAussi();
+      },
+    });
   }
 
   // Visionneuse
@@ -1340,7 +1397,7 @@
   document.getElementById('v-supprimer').onclick = async () => {
     const { o, id } = imageVue;
     fermerImage();
-    try { await supprimerImage(o, id); annoncer('Image supprimée'); } catch { annoncer('Suppression impossible (réseau)'); }
+    supprimerImagesDiffere(o, [id], 'Image supprimée');
   };
   document.getElementById('v-copier').onclick = async () => {
     const donnees = imagesCompletes.get(imageVue.id);
@@ -1423,9 +1480,9 @@
       valeurChamp: '',
       longueurMax: 30,
       boutons: [
-        { texte: 'Annuler', valeur: null },
         ...SUGGESTIONS_BALISES.map(n => ({ texte: n, valeur: n })),
         ...(dans ? [{ texte: `Retirer <${dans.nom}>`, classe: 'danger', valeur: '__retirer' }] : []),
+        { texte: 'Annuler', classe: 'annuler', valeur: null },
         { texte: 'OK', classe: 'principal', valeur: '__ok' },
       ],
     });
@@ -1435,24 +1492,24 @@
     if (r.valeur === '__retirer') { retirerBalise(dans); return; }
     const nom = nomBalise(r.valeur === '__ok' ? r.champ : r.valeur);
     if (!nom) { if (r.valeur === '__ok') annoncer('Nom de balise invalide'); return; }
-    entourerLignes(`<${nom}>`, `</${nom}>`);
+    entourerLignes(`<${nom}>`, `</${nom}>`, true);
   }
 
   // Entoure les lignes de la sélection (ou la ligne du curseur) ; sur une ligne vide, un bloc à remplir
-  function entourerLignes(ouvre, ferme) {
+  // ligneApres : une ligne vide après la fermeture, pour enchaîner sur la suite
+  function entourerLignes(ouvre, ferme, ligneApres) {
     const lignes = note.value.split('\n');
     const [i0] = pointer(lignes, note.selectionStart);
     let [i1, col1] = pointer(lignes, note.selectionEnd);
     if (note.selectionEnd > note.selectionStart && col1 === 0 && i1 > i0) i1--;
-    if (i0 === i1 && !lignes[i0].trim()) {
-      lignes.splice(i0, 1, ouvre, '', ferme);
-      const c = decalageDe(lignes, i0 + 1, 0);
-      appliquer(lignes, c, c);
-      return;
-    }
-    lignes.splice(i1 + 1, 0, ferme);
-    lignes.splice(i0, 0, ouvre);
-    appliquer(lignes, decalageDe(lignes, i0 + 1, 0), decalageDe(lignes, i1 + 1, lignes[i1 + 1].length));
+    const vide = i0 === i1 && !lignes[i0].trim();
+    if (vide) lignes.splice(i0, 1, ouvre, '', ferme);
+    else { lignes.splice(i1 + 1, 0, ferme); lignes.splice(i0, 0, ouvre); }
+    const iFerme = vide ? i0 + 2 : i1 + 2;
+    const suivante = lignes[iFerme + 1];
+    if (ligneApres && (suivante === undefined || (suivante.trim() && !BALISE_FERME.test(suivante)))) lignes.splice(iFerme + 1, 0, '');
+    if (vide) { const c = decalageDe(lignes, i0 + 1, 0); appliquer(lignes, c, c); }
+    else appliquer(lignes, decalageDe(lignes, i0 + 1, 0), decalageDe(lignes, i1 + 1, lignes[i1 + 1].length));
   }
 
   function retirerBalise(bloc) {
@@ -1476,7 +1533,7 @@
   async function boutonModele() {
     const r = await popup({
       message: 'Insérer un modèle de prompt (les parties laissées vides ne sont pas copiées) :',
-      boutons: [{ texte: 'Annuler', valeur: null }, ...MODELES.map((m, i) => ({ texte: m.nom, valeur: i }))],
+      boutons: [...MODELES.map((m, i) => ({ texte: m.nom, valeur: i })), { texte: 'Annuler', classe: 'annuler', valeur: null }],
     });
     if (r.valeur === null || r.valeur === undefined) return;
     const m = MODELES[r.valeur], v = note.value;
@@ -1614,8 +1671,8 @@
     if (tactile && peutPartagerFichiers) {
       const fichiers = fichiersDe(images);
       const r = await popup({
-        message: `${images.length > 1 ? `${images.length} images` : '1 image'}${texte ? ' et du texte' : ''}. Partager tout envoie le tout d'un coup (choisir Claude) ; sinon, copie en plusieurs fois.`,
-        boutons: [{ texte: 'Une par une', valeur: 'suite' }, { texte: 'Partager tout', classe: 'principal', valeur: 'partage' }],
+        message: `${images.length > 1 ? `${images.length} images` : '1 image'}${texte ? ' et du texte' : ''}. Partager tout envoie le tout d'un coup vers l'appli Claude (pas Claude Code) ; Une par une copie en plusieurs fois et marche partout.`,
+        boutons: [{ texte: 'Une par une', valeur: 'suite' }, { texte: 'Annuler', classe: 'annuler', valeur: null }, { texte: 'Partager tout', classe: 'principal', valeur: 'partage' }],
       });
       if (r.valeur === 'partage') { partager(texte, await fichiers); return; }
       if (r.valeur !== 'suite') return;
@@ -1653,26 +1710,30 @@
   };
 
   // Effacer : texte et images de l'onglet
-  document.getElementById('effacer').onclick = async () => {
-    const o = actif, n = o.images.length + o.locales.length;
-    if (!o.texte && !n) return;
-    const quoi = [o.texte && 'le texte', n && `${n} image${n > 1 ? 's' : ''}`].filter(Boolean).join(' et ');
-    const r = await popup({
-      message: `Effacer ${quoi} de « ${titre(o)} » sur tous les appareils ?`,
-      boutons: [{ texte: 'Annuler', valeur: false }, { texte: 'Effacer', classe: 'danger', valeur: true }],
-    });
-    if (!r.valeur) return;
-    if (o.texte) { definir(o, { texte: '' }); envoyer(o); }
-    if (n) {
-      const ids = [...o.images, ...o.locales].map(x => x.id);
-      o.locales = [];
-      try {
-        await modifierIndex(o, () => []);
-        ids.forEach(id => { fetch(urlImage(id), { method: 'PUT', body: 'null' }).catch(() => {}); imagesCompletes.delete(id); idb.effacer(id); });
-      } catch { annoncer('Images : suppression impossible (réseau)'); }
-      afficherImages();
-    }
-    annoncer('Effacé');
+  // Effacer : un appui demande confirmation ; un double appui efface tout de suite.
+  // Dans les deux cas, « Annuler » pendant 5 s rend le texte et les images.
+  function effacerOnglet(o) {
+    const ids = [...o.images, ...o.locales].map(x => x.id).filter(id => !o.masquees.has(id));
+    const avaitTexte = !!note.value;
+    if (avaitTexte) remplacer(0, note.value.length, ''); // annulable (historique de l'éditeur)
+    const rendreTexte = () => { if (avaitTexte && o === actif && !note.value) CM.undo(vue); };
+    supprimerImagesDiffere(o, ids, 'Effacé', rendreTexte);
+  }
+  let attenteEffacer = null;
+  document.getElementById('effacer').onclick = () => {
+    const o = actif;
+    if (attenteEffacer) { clearTimeout(attenteEffacer); attenteEffacer = null; effacerOnglet(o); return; }
+    attenteEffacer = setTimeout(async () => {
+      attenteEffacer = null;
+      const n = [...o.images, ...o.locales].filter(x => !o.masquees.has(x.id)).length;
+      if (!note.value && !n) return;
+      const quoi = [note.value && 'le texte', n && `${n} image${n > 1 ? 's' : ''}`].filter(Boolean).join(' et ');
+      const r = await popup({
+        message: `Effacer ${quoi} de « ${titre(o)} » sur tous les appareils ? (Astuce : un double appui sur Effacer efface sans demander.)`,
+        boutons: [{ texte: 'Annuler', classe: 'annuler', valeur: false }, { texte: 'Effacer', classe: 'principal', valeur: true }],
+      });
+      if (r.valeur && o === actif) effacerOnglet(o);
+    }, 350);
   };
 
   // ---- Réglages : thème, lien secret et nettoyage de la base ----
@@ -1731,7 +1792,7 @@
         { texte: `Thème : ${{ auto: 'auto', clair: 'clair', sombre: 'sombre' }[themeActuel()]}`, valeur: 'theme' },
         { texte: 'Supprimer les images', classe: 'danger', valeur: 'images' },
         { texte: 'Tout effacer', classe: 'danger', valeur: 'tout' },
-        { texte: 'Fermer', valeur: false },
+        { texte: 'Fermer', classe: 'annuler', valeur: false },
         { texte: 'Copier le lien', classe: 'principal', valeur: 'lien' },
       ],
     });
@@ -1754,7 +1815,7 @@
       message: tout
         ? 'Tout effacer ? Les notes, les noms d\'onglets et les images de ce bloc-notes seront supprimés de la base, sur tous les appareils (appli normale comprise). C\'est définitif.'
         : 'Supprimer toutes les images de ce bloc-notes, sur tous les appareils (appli normale comprise) ? Le texte des notes est conservé.',
-      boutons: [{ texte: 'Annuler', valeur: false }, { texte: tout ? 'Tout effacer' : 'Supprimer', classe: 'danger', valeur: true }],
+      boutons: [{ texte: 'Annuler', classe: 'annuler', valeur: false }, { texte: tout ? 'Tout effacer' : 'Supprimer', classe: 'principal', valeur: true }],
     });
     if (!ok.valeur) return;
     try {
