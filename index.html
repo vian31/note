@@ -11,7 +11,7 @@
 <meta name="theme-color" content="#ffffff">
 <script>
   // Version de l'appli : affichée dans ⚙ Réglages (vérifier que tous les appareils ont la même)
-  window.VERSION_NOTE = 'v0.3';
+  window.VERSION_NOTE = 'v0.4';
   // Thème choisi dans les réglages, appliqué avant l'affichage (pas de flash)
   try { const t = localStorage.getItem('theme'); if (t === 'clair' || t === 'sombre') document.documentElement.dataset.theme = t; } catch {}
   // Filet de sécurité : si une erreur bloque l'appli au démarrage (par exemple un fichier resté en
@@ -224,6 +224,8 @@
   <button role="tab">1</button>
   <button role="tab">2</button>
   <button role="tab">3</button>
+  <button role="tab">4</button>
+  <button role="tab">5</button>
   <button id="reglages" title="Réglages : version, thème, lien secret, nettoyage" aria-label="Réglages">⚙</button>
   <span id="etat" title="Synchronisation"></span>
 </div>
@@ -642,7 +644,7 @@
   // ---- Notes ----
   // texte : contenu local ; depart : dernière version du serveur connue (le texte local en dérive) ;
   // les deux sont mémorisés, donc une modification non envoyée survit à la fermeture de l'appli.
-  const onglets = ['1', '2', '3'].map(nom => {
+  const onglets = ['1', '2', '3', '4', '5'].map(nom => {
     const cache = `note:${cle}:${ESPACE}${nom}`;
     const texte = stock.lire(cache) || '';
     return {
@@ -1963,7 +1965,7 @@
   majCouleurBarre();
 
   const supprimer = url => fetch(url, { method: 'PUT', body: 'null' }).then(r => { if (!r.ok) throw new Error(r.status); });
-  const INDEX_TOUS = ['i1', 'i2', 'i3', 'ti1', 'ti2', 'ti3']; // appli normale et page de test
+  const INDEX_TOUS = ['1', '2', '3', '4', '5'].flatMap(n => ['i' + n, 'ti' + n]); // appli normale et page de test
 
   function oublierImagesLocales() {
     imagesCompletes.clear();

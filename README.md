@@ -6,7 +6,7 @@ captures d'écran. Aucune authentification : un lien secret donne accès au bloc
 
 <https://vian31.github.io/note/> — « Ajouter à l'écran d'accueil » pour l'installer.
 
-**Version actuelle : v0.3** (affichée en tête de ⚙ Réglages : vérifier que chaque appareil a la même ;
+**Version actuelle : v0.4** (affichée en tête de ⚙ Réglages : vérifier que chaque appareil a la même ;
 sinon, fermer et rouvrir l'appli, ou Ctrl+F5 sur PC).
 
 GitHub Pages ne sert que des fichiers statiques : la synchronisation passe par une
@@ -14,7 +14,7 @@ GitHub Pages ne sert que des fichiers statiques : la synchronisation passe par u
 
 ## Utilisation
 
-- **Onglets** : trois notes ; toucher l'onglet affiché pour le renommer.
+- **Onglets** : cinq notes ; toucher l'onglet affiché pour le renommer.
 - **Barre** : mise en forme `•` `1.` `</>` `🖼` Balise Modèle, puis actions Effacer Copier Coller
   (deux rangées sur téléphone, une seule à gauche/droite sur PC) ; ⚙ réglages et point d'état
   en haut. Sur PC, colonne centrée.
@@ -98,7 +98,7 @@ les règles Firebase interdisent de lister la base.
   `lib/LICENSE-codemirror.txt`), empaqueté dans `lib/codemirror.js` et servi par le même site
   (rien à autoriser sur un proxy). Ctrl+Z ne défait jamais une modification venue d'un autre
   appareil ; historique par onglet.
-- **Règles Firebase** (`database.rules.json`) : notes `notes/<clé>/{1,2,3}`, noms `n1…`, index
+- **Règles Firebase** (`database.rules.json`) : notes `notes/<clé>/{1…5}`, noms `n1…`, index
   d'images `i1…` ; images `images/<clé>/<id>/<morceau>`. Sur un bloc-notes entier, seule la
   suppression est autorisée.
 - **Page de test** : <https://vian31.github.io/note/test.html>, même code avec ses données rangées
