@@ -11,7 +11,7 @@
 <meta name="theme-color" content="#ffffff">
 <script>
   // Version de l'appli : affichée dans ⚙ Réglages (vérifier que tous les appareils ont la même)
-  window.VERSION_NOTE = 'v0.4';
+  window.VERSION_NOTE = 'v0.5';
   // Thème choisi dans les réglages, appliqué avant l'affichage (pas de flash)
   try { const t = localStorage.getItem('theme'); if (t === 'clair' || t === 'sombre') document.documentElement.dataset.theme = t; } catch {}
   // Filet de sécurité : si une erreur bloque l'appli au démarrage (par exemple un fichier resté en
@@ -77,7 +77,10 @@
     border-bottom: 2px solid transparent; opacity: .5;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  #onglets [role="tab"][aria-selected="true"] { border-bottom-color: currentColor; opacity: 1; font-weight: 600; }
+  /* L'onglet affiché prend la place dont son titre a besoin ; les autres se serrent (« … » si trop courts) */
+  #onglets { gap: 2px; padding-left: 8px; padding-right: 8px; }
+  #onglets [role="tab"] { flex: 1 1 0; min-width: 18px; padding-left: 2px; padding-right: 2px; }
+  #onglets [role="tab"][aria-selected="true"] { flex: 0 1 auto; border-bottom-color: currentColor; opacity: 1; font-weight: 600; padding-left: 6px; padding-right: 6px; }
   #onglets #reglages { flex: none; border: 0; background: none; padding: 4px 6px; font-size: 18px; }
   /* Zone de saisie : éditeur CodeMirror (le code s'y affiche plus petit, en police à chasse fixe) */
   #zone { position: relative; flex: 1; min-height: 0; }

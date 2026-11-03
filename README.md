@@ -6,7 +6,7 @@ captures d'écran. Aucune authentification : un lien secret donne accès au bloc
 
 <https://vian31.github.io/note/> — « Ajouter à l'écran d'accueil » pour l'installer.
 
-**Version actuelle : v0.4** (affichée en tête de ⚙ Réglages : vérifier que chaque appareil a la même ;
+**Version actuelle : v0.5** (affichée en tête de ⚙ Réglages : vérifier que chaque appareil a la même ;
 sinon, fermer et rouvrir l'appli, ou Ctrl+F5 sur PC).
 
 GitHub Pages ne sert que des fichiers statiques : la synchronisation passe par une
@@ -14,7 +14,7 @@ GitHub Pages ne sert que des fichiers statiques : la synchronisation passe par u
 
 ## Utilisation
 
-- **Onglets** : cinq notes ; toucher l'onglet affiché pour le renommer.
+- **Onglets** : cinq notes ; toucher l'onglet affiché pour le renommer ; l'onglet affiché montre son titre en entier, les autres se serrent.
 - **Barre** : mise en forme `•` `1.` `</>` `🖼` Balise Modèle, puis actions Effacer Copier Coller
   (deux rangées sur téléphone, une seule à gauche/droite sur PC) ; ⚙ réglages et point d'état
   en haut. Sur PC, colonne centrée.
