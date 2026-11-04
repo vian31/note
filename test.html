@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="referrer" content="no-referrer">
-<title>Note v0.6.1 (test)</title>
+<title>Note v0.6.2 (test)</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#ffffff">
 <script>
   // Version de l'appli : affichée dans ⚙ Réglages (vérifier que tous les appareils ont la même)
-  window.VERSION_NOTE = 'v0.6.1';
+  window.VERSION_NOTE = 'v0.6.2';
   document.title = 'Note ' + window.VERSION_NOTE + (/test\.html$/.test(location.pathname) ? ' (test)' : '');
   // Thème choisi dans les réglages, appliqué avant l'affichage (pas de flash)
   try { const t = localStorage.getItem('theme'); if (t === 'clair' || t === 'sombre') document.documentElement.dataset.theme = t; } catch {}
@@ -782,6 +782,7 @@
 
   // Lecture directe ; le paramètre t évite les réponses mises en cache par un proxy
   async function lire(o) {
+    if (o.vidage) await o.vidage;
     const envois = o.envois;
     let r, data;
     try {
@@ -1170,13 +1171,18 @@
     definir(o, { texte: '', depart: '' });
     definirNom(o, '', false);
     const effacer = url => fetch(url, { method: 'PUT', body: 'null' }).catch(() => {});
-    await Promise.all([effacer(o.url), effacer(o.urlNom), ids.length ? supprimerImages(o, ids).catch(() => {}) : effacer(o.urlIndex)]);
+    // Les lectures de cet onglet attendent la fin de l'effacement (pas d'ancien contenu relu entre-temps)
+    const vidage = o.vidage = Promise.all([effacer(o.url), effacer(o.urlNom), ids.length ? supprimerImages(o, ids).catch(() => {}) : effacer(o.urlIndex)]);
+    await vidage;
+    if (o.vidage === vidage) o.vidage = null;
   }
 
   async function nouvelOnglet() {
     if (ordre.length >= MAX_ONGLETS) { annoncer(`${MAX_ONGLETS} onglets au plus`); return; }
     const n = EMPLACEMENTS.find(x => !ordre.includes(x)), o = parNom[n];
-    await viderEmplacement(o); // un ancien contenu (onglet fermé ailleurs) ne doit pas réapparaître
+    // Un ancien contenu (onglet fermé ailleurs) ne doit pas réapparaître. L'onglet s'ouvre tout de suite
+    // (vidé localement) : une frappe immédiate ne doit pas partir dans l'onglet précédent
+    viderEmplacement(o);
     modifierOrdre(l => l.includes(n) || l.length >= MAX_ONGLETS ? l : [...l, n]);
     choisir(o);
     vue.focus();
@@ -1736,6 +1742,7 @@
 
   // Lecture de l'index (304 si inchangé)
   async function lireIndex(o) {
+    if (o.vidage) await o.vidage;
     const entetes = o.etagIndex ? { ...entetesLecture, 'if-none-match': o.etagIndex } : entetesLecture;
     const r = await fetch(`${o.urlIndex}?t=${Date.now()}`, { cache: 'no-store', headers: entetes });
     if (r.status === 304) return;
