@@ -6,7 +6,7 @@ captures d'écran. Aucune authentification : un lien secret donne accès au bloc
 
 <https://vian31.github.io/note/> — « Ajouter à l'écran d'accueil » pour l'installer.
 
-**Version actuelle : v0.5.1** (affichée en tête de ⚙ Réglages : vérifier que chaque appareil a la même ;
+**Version actuelle : v0.6.1** (dans le titre de la page et en tête de ⚙ Réglages : vérifier que chaque appareil a la même ;
 sinon, fermer et rouvrir l'appli, ou Ctrl+F5 sur PC).
 
 GitHub Pages ne sert que des fichiers statiques : la synchronisation passe par une
@@ -14,7 +14,10 @@ GitHub Pages ne sert que des fichiers statiques : la synchronisation passe par u
 
 ## Utilisation
 
-- **Onglets** : cinq notes ; toucher l'onglet affiché pour le renommer ; l'onglet affiché montre son titre en entier, les autres se serrent.
+- **Onglets** façon navigateur, jusqu'à 10 : **+** pour ouvrir, **×** pour fermer (Annuler pendant
+  5 s), glisser pour réordonner (souris ; au doigt : appui long puis glisser), toucher l'onglet
+  affiché pour le renommer sur place ; sans nom, le titre est la 1re ligne de la note. L'onglet
+  affiché montre son titre en entier, les autres se serrent. Ordre synchronisé entre appareils.
 - **Barre** : mise en forme `•` `1.` `</>` `🖼` Balise Modèle, puis actions Effacer Copier Coller
   (deux rangées sur téléphone, une seule à gauche/droite sur PC) ; ⚙ réglages et point d'état
   en haut. Sur PC, colonne centrée.
@@ -98,12 +101,8 @@ les règles Firebase interdisent de lister la base.
   `lib/LICENSE-codemirror.txt`), empaqueté dans `lib/codemirror.js` et servi par le même site
   (rien à autoriser sur un proxy). Ctrl+Z ne défait jamais une modification venue d'un autre
   appareil ; historique par onglet.
-- **Règles Firebase** (`database.rules.json`) : notes `notes/<clé>/{1…5}`, noms `n1…`, index
-  d'images `i1…` ; images `images/<clé>/<id>/<morceau>`. Sur un bloc-notes entier, seule la
+- **Règles Firebase** (`database.rules.json`) : notes `notes/<clé>/{1…10}`, noms `n1…`, index
+  d'images `i1…`, ordre des onglets `ordre` ; images `images/<clé>/<id>/<morceau>`. Sur un bloc-notes entier, seule la
   suppression est autorisée.
-- **Page de test (v0.6.1)** : onglets façon navigateur, jusqu'à 10 : **+** pour ouvrir, **×** pour fermer
-  (Annuler pendant 5 s), glisser pour réordonner (souris ; au doigt : appui long puis glisser),
-  toucher l'onglet affiché pour renommer sur place ; sans nom, le titre est la 1re ligne de la note.
-  Ordre synchronisé (`notes/<clé>/ordre`), 10 emplacements de notes. Version dans le titre de la page.
 - **Page de test** : <https://vian31.github.io/note/test.html>, même code avec ses données rangées
   à part (`t1…`, `tn1…`, `ti1…`), pour essayer une nouveauté sans toucher aux vraies notes.
