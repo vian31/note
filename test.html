@@ -4,14 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="referrer" content="no-referrer">
-<title>Note (test)</title>
+<title>Note v0.6 (test)</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#ffffff">
 <script>
   // Version de l'appli : affichée dans ⚙ Réglages (vérifier que tous les appareils ont la même)
-  window.VERSION_NOTE = 'v0.5';
+  window.VERSION_NOTE = 'v0.6';
+  document.title = 'Note ' + window.VERSION_NOTE + (/test\.html$/.test(location.pathname) ? ' (test)' : '');
   // Thème choisi dans les réglages, appliqué avant l'affichage (pas de flash)
   try { const t = localStorage.getItem('theme'); if (t === 'clair' || t === 'sombre') document.documentElement.dataset.theme = t; } catch {}
   // Filet de sécurité : si une erreur bloque l'appli au démarrage (par exemple un fichier resté en
@@ -46,7 +47,7 @@
     color-scheme: light;
     --fond: #fff; --texte: #111; --bord: #e5e5e5; --bouton: #e8ecf2; --bord-bouton: #c3ccd8; --appui: #d5dce6; --voile: rgba(0,0,0,.35);
     --accent: #2563c9; --sur-accent: #fff;
-    --code: #f3f5f8; --code-cloture: #e7ebf1; --code-bord: #8a9bb5; --exterieur: #eceff4; --code-texte: #0b6584; --code-balise: #8792a5;
+    --code: #f3f5f8; --code-cloture: #e7ebf1; --code-bord: #8a9bb5; --exterieur: #eceff4; --barre: #e9edf2; --code-texte: #0b6584; --code-balise: #8792a5;
     --tag-fond: #f6f1fb; --tag-bord: #a98bd0; --tag-texte: #6b3fa0;
   }
   /* Thème : automatique (réglage du téléphone / PC), ou forcé dans ⚙ Réglages */
@@ -55,7 +56,7 @@
       color-scheme: dark;
       --fond: #111; --texte: #eee; --bord: #333; --bouton: #2a313c; --bord-bouton: #46505f; --appui: #3a4351; --voile: rgba(0,0,0,.6);
       --accent: #4b8bf0; --sur-accent: #fff;
-      --code: #1b2029; --code-cloture: #232a35; --code-bord: #5d7091; --exterieur: #070707; --code-texte: #7cc7e6; --code-balise: #6c778a;
+      --code: #1b2029; --code-cloture: #232a35; --code-bord: #5d7091; --exterieur: #070707; --barre: #1b1f26; --code-texte: #7cc7e6; --code-balise: #6c778a;
       --tag-fond: #251e31; --tag-bord: #8a6bb8; --tag-texte: #c4a3f0;
     }
   }
@@ -63,25 +64,61 @@
     color-scheme: dark;
     --fond: #111; --texte: #eee; --bord: #333; --bouton: #2a313c; --bord-bouton: #46505f; --appui: #3a4351; --voile: rgba(0,0,0,.6);
     --accent: #4b8bf0; --sur-accent: #fff;
-    --code: #1b2029; --code-cloture: #232a35; --code-bord: #5d7091; --exterieur: #070707; --code-texte: #7cc7e6; --code-balise: #6c778a;
+    --code: #1b2029; --code-cloture: #232a35; --code-bord: #5d7091; --exterieur: #070707; --barre: #1b1f26; --code-texte: #7cc7e6; --code-balise: #6c778a;
       --tag-fond: #251e31; --tag-bord: #8a6bb8; --tag-texte: #c4a3f0;
   }
   html, body { margin: 0; height: 100%; overflow: hidden; background: var(--fond); color: var(--texte); }
   body { display: flex; flex-direction: column; font: 18px/1.5 system-ui, sans-serif; }
+  /* Onglets façon navigateur : barre teintée, onglet affiché relié à la page, séparateurs */
   #onglets {
-    display: flex; align-items: center; gap: 4px; padding: max(8px, env(safe-area-inset-top)) 12px 0 16px;
-    border-bottom: 1px solid var(--bord);
+    display: flex; align-items: flex-end; gap: 2px; padding: max(6px, env(safe-area-inset-top)) 6px 0 6px;
+    background: var(--barre); border-bottom: 1px solid var(--bord);
   }
-  #onglets [role="tab"] {
-    flex: 1; min-width: 0; border: 0; border-radius: 0; background: none; padding: 8px 4px;
-    border-bottom: 2px solid transparent; opacity: .5;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  #liste-onglets {
+    display: flex; align-items: flex-end; flex: 0 1 auto; min-width: 0; overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: none; touch-action: pan-x;
   }
-  /* L'onglet affiché prend la place dont son titre a besoin ; les autres se serrent (« … » si trop courts) */
-  #onglets { gap: 2px; padding-left: 8px; padding-right: 8px; }
-  #onglets [role="tab"] { flex: 1 1 0; min-width: 18px; padding-left: 2px; padding-right: 2px; }
-  #onglets [role="tab"][aria-selected="true"] { flex: 0 1 auto; border-bottom-color: currentColor; opacity: 1; font-weight: 600; padding-left: 6px; padding-right: 6px; }
-  #onglets #reglages { flex: none; border: 0; background: none; padding: 4px 6px; font-size: 18px; }
+  #liste-onglets::-webkit-scrollbar { display: none; }
+  .onglet {
+    position: relative; flex: 0 1 auto; width: 150px; min-width: 52px; max-width: 220px; height: 38px;
+    display: flex; align-items: center; gap: 2px; padding: 0 4px 0 10px; margin-bottom: -1px;
+    border: 1px solid transparent; border-bottom: 0; border-radius: 9px 9px 0 0;
+    color: var(--texte); opacity: .62; cursor: pointer; user-select: none; -webkit-user-select: none;
+    -webkit-touch-callout: none; font-size: 16px;
+  }
+  .onglet::before { /* séparateur */
+    content: ''; position: absolute; left: -1px; top: 10px; bottom: 10px; width: 1px; background: var(--bord-bouton);
+  }
+  .onglet:first-child::before, .onglet[aria-selected="true"]::before, .onglet[aria-selected="true"] + .onglet::before { display: none; }
+  .onglet[aria-selected="true"] {
+    flex: 0 0 auto; width: auto; max-width: 100%; opacity: 1; font-weight: 600; z-index: 1;
+    background: var(--fond); border-color: var(--bord); border-bottom: 1px solid var(--fond); height: 39px;
+  }
+  .onglet:not([aria-selected="true"]):hover { background: var(--appui); }
+  .onglet .titre { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .onglet .fermer {
+    flex: none; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: transparent;
+    font-size: 17px; line-height: 1; opacity: .6; display: grid; place-items: center;
+  }
+  .onglet .fermer:hover { opacity: 1; background: var(--appui); }
+  @media (hover: hover) { .onglet:not([aria-selected="true"]):not(:hover) .fermer { visibility: hidden; } }
+  /* Onglet inactif étroit : pas de ×, pour qu'un clic au milieu ne le ferme pas (comme Chrome) */
+  .onglet:not([aria-selected="true"]) { container-type: inline-size; }
+  @container (max-width: 100px) { .onglet .fermer { display: none; } }
+  @media (hover: none) { .onglet:not([aria-selected="true"]) .fermer { display: none; } }
+  .onglet .edition-titre {
+    flex: 1 1 auto; min-width: 4em; width: 100%; font: inherit; font-weight: 600; padding: 2px 4px;
+    border: 1px solid var(--accent); border-radius: 5px; background: var(--fond); color: var(--texte); outline: none;
+  }
+  .onglet.glisse { z-index: 2; opacity: .9; box-shadow: 0 4px 14px rgba(0,0,0,.25); background: var(--fond); transition: none; }
+  #nouvel-onglet {
+    flex: none; align-self: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%;
+    background: transparent; font-size: 22px; line-height: 1; margin: 0 2px 2px;
+  }
+  #nouvel-onglet:hover { background: var(--appui); }
+  #onglets .espace { flex: 1 1 0; }
+  #onglets #reglages { flex: none; align-self: center; border: 0; background: none; padding: 4px 6px; font-size: 18px; }
+  #onglets #etat { align-self: center; }
   /* Zone de saisie : éditeur CodeMirror (le code s'y affiche plus petit, en police à chasse fixe) */
   #zone { position: relative; flex: 1; min-height: 0; }
   #zone .cm-editor { height: 100%; color: var(--texte); background: transparent; }
@@ -159,6 +196,7 @@
       background: var(--fond); border-left: 1px solid var(--bord); border-right: 1px solid var(--bord);
     }
     #zone { flex: 1; }
+    #onglets { background: var(--barre); }
     nav { flex-direction: row; align-items: center; gap: 8px; padding: 10px 16px max(10px, env(safe-area-inset-bottom)); }
     nav .fmt, nav .act { width: auto; gap: 8px; }
     nav .act { margin-left: auto; }
@@ -223,12 +261,10 @@
 </style>
 </head>
 <body>
-<div id="onglets" role="tablist">
-  <button role="tab">1</button>
-  <button role="tab">2</button>
-  <button role="tab">3</button>
-  <button role="tab">4</button>
-  <button role="tab">5</button>
+<div id="onglets">
+  <div id="liste-onglets" role="tablist" aria-label="Onglets"></div>
+  <button id="nouvel-onglet" title="Nouvel onglet" aria-label="Nouvel onglet">+</button>
+  <span class="espace"></span>
   <button id="reglages" title="Réglages : version, thème, lien secret, nettoyage" aria-label="Réglages">⚙</button>
   <span id="etat" title="Synchronisation"></span>
 </div>
@@ -514,7 +550,6 @@
   window.noteCurseur = (a, b = a) => note.setSelectionRange(a, b);
   window.noteSelection = () => [note.selectionStart, note.selectionEnd];
   const etat = document.getElementById('etat');
-  const boutonsOnglets = [...document.querySelectorAll('#onglets [role="tab"]')];
   const base = DATABASE_URL.replace(/\/$/, '');
   const FORMAT_CLE = /^[A-Za-z0-9_-]{22,}$/;
   // Page de test : ses notes, noms et images sont rangés à part (t1…, tn1…, ti1…), sans toucher
@@ -647,7 +682,9 @@
   // ---- Notes ----
   // texte : contenu local ; depart : dernière version du serveur connue (le texte local en dérive) ;
   // les deux sont mémorisés, donc une modification non envoyée survit à la fermeture de l'appli.
-  const onglets = ['1', '2', '3', '4', '5'].map(nom => {
+  // 10 emplacements de notes ; ceux qui sont ouverts, et dans quel ordre, sont dans « ordre » (synchronisé)
+  const EMPLACEMENTS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'], MAX_ONGLETS = 10;
+  const onglets = EMPLACEMENTS.map(nom => {
     const cache = `note:${cle}:${ESPACE}${nom}`;
     const texte = stock.lire(cache) || '';
     return {
@@ -683,7 +720,18 @@
     etat.className = lectureEnEchec || onglets.some(o => o.echec || o.locales.some(x => x.statut === 'erreur')) ? 'err' : 'ok';
   }
 
-  let actif = onglets[+stock.lire(ESPACE + 'onglet')] || onglets[0];
+  const parNom = Object.fromEntries(onglets.map(o => [o.numero, o]));
+
+  // Onglets ouverts, dans l'ordre d'affichage (par défaut : les 5 de la version précédente)
+  const ORDRE_DEFAUT = ['1', '2', '3', '4', '5'];
+  const cacheOrdre = `ordre:${cle}:${ESPACE}`, urlOrdre = `${base}/notes/${cle}/${ESPACE}ordre.json`;
+  const validerOrdre = l => Array.isArray(l) ? [...new Set(l.map(String))].filter(n => EMPLACEMENTS.includes(n)).slice(0, MAX_ONGLETS) : null;
+  let ordre = (() => {
+    try { const l = validerOrdre(JSON.parse(stock.lire(cacheOrdre))); if (l && l.length) return l; } catch {}
+    return ORDRE_DEFAUT.slice();
+  })();
+  let actif = parNom[stock.lire(ESPACE + 'onglet-n')] || onglets[+stock.lire(ESPACE + 'onglet')] || parNom[ordre[0]];
+  if (!ordre.includes(actif.numero)) actif = parNom[ordre[0]];
 
   function definir(o, { texte = o.texte, depart = o.depart }) {
     const ancien = o.texte;
@@ -692,6 +740,7 @@
     stock.ecrire(o.cache, texte);
     stock.ecrire(o.cache + ':depart', depart);
     if (o === actif && note.value !== texte) afficher(ancien, texte);
+    if (!o.nom && texte !== ancien && ordre.includes(o.numero)) majTitres();
   }
 
   // Remplace le texte affiché en gardant le curseur au bon endroit
@@ -839,6 +888,7 @@
     if (!document.hidden) {
       try { await lire(o); } catch {}
       try { await lireIndex(o); } catch {}
+      try { await lireOrdre(); } catch {}
     }
     if (o === actif && tour === tourSondage) minuteurSondage = setTimeout(() => sonder(o), 2000);
   }
@@ -875,6 +925,7 @@
     lireNoms();
     onglets.forEach(o => { if (aEnvoyer(o)) envoyer(o); });
     reessayerImages();
+    envoyerOrdre();
   }
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) envoyerAvantFermeture(); else reprendre();
@@ -886,31 +937,293 @@
     if (!fluxBloque && !document.hidden && (flux.readyState === EventSource.CLOSED || Date.now() - dernierSignal > 75000)) reprendre();
   }, 15000);
 
-  // ---- Noms des onglets (synchronisés, rarement modifiés : lus toutes les 10 s) ----
-  const titre = o => o.nom || o.numero;
-  function afficherNoms() {
-    boutonsOnglets.forEach((b, i) => { b.textContent = titre(onglets[i]); b.title = titre(onglets[i]); });
+  // ---- Onglets, comme dans un navigateur ----
+  // Ouvrir (+), fermer (×, Annuler pendant 5 s), glisser pour réordonner, renommer sur place.
+  // Titre : le nom choisi, sinon la première ligne de la note.
+  const listeOnglets = document.getElementById('liste-onglets');
+  let edition = false, glisse = null, aGlisse = false;
+
+  function titreAuto(o) {
+    for (const l of o.texte.split('\n', 40)) {
+      if (CLOTURE.test(l) || BALISE_OUVRE.test(l) || BALISE_FERME.test(l)) continue;
+      const t = l.replace(/^#+\s*/, '').replace(LISTE, '').replace(/[*_`]/g, '').trim();
+      if (t) return t.slice(0, 30);
+    }
+    return '';
+  }
+  const titre = o => o.nom || titreAuto(o) || 'Nouvel onglet';
+
+  function creerOnglet(o) {
+    const t = document.createElement('div');
+    t.className = 'onglet';
+    t.setAttribute('role', 'tab');
+    t.setAttribute('aria-selected', o === actif);
+    t.dataset.n = o.numero;
+    t.tabIndex = o === actif ? 0 : -1;
+    t.title = o === actif ? `${titre(o)} — toucher pour renommer` : titre(o);
+    const s = document.createElement('span');
+    s.className = 'titre';
+    s.textContent = titre(o);
+    const f = document.createElement('button');
+    f.className = 'fermer';
+    f.textContent = '×';
+    f.title = 'Fermer l\'onglet';
+    f.setAttribute('aria-label', 'Fermer l\'onglet');
+    f.tabIndex = -1;
+    f.hidden = ordre.length < 2;
+    f.addEventListener('pointerdown', e => e.stopPropagation());
+    f.addEventListener('mousedown', e => e.preventDefault());
+    f.onclick = e => { e.stopPropagation(); fermerOnglet(o); };
+    t.append(s, f);
+    t.addEventListener('pointerdown', debutGlisser);
+    t.addEventListener('mousedown', e => { if (!edition) e.preventDefault(); }); // garder le focus dans la note
+    t.addEventListener('contextmenu', e => e.preventDefault());                   // appui long : glisser, pas de menu
+    t.onclick = () => {
+      if (aGlisse || edition) return;
+      if (o !== actif) choisir(o); else editerTitre(t, o);
+    };
+    t.onkeydown = e => { if (e.key === 'Enter' || e.key === 'F2') { e.preventDefault(); editerTitre(t, o); } };
+    return t;
   }
 
+  function afficherOnglets() {
+    if (glisse || edition) return;
+    listeOnglets.replaceChildren(...ordre.map(n => creerOnglet(parNom[n])));
+    document.getElementById('nouvel-onglet').hidden = ordre.length >= MAX_ONGLETS;
+    montrerOngletActif();
+  }
+  // La barre défile pour montrer l'onglet affiché en entier
+  function montrerOngletActif() {
+    requestAnimationFrame(() => {
+      const t = listeOnglets.querySelector('[aria-selected="true"]');
+      if (!t) return;
+      const g = t.offsetLeft - listeOnglets.offsetLeft, d = g + t.offsetWidth;
+      if (g < listeOnglets.scrollLeft) listeOnglets.scrollLeft = g;
+      else if (d > listeOnglets.scrollLeft + listeOnglets.clientWidth) listeOnglets.scrollLeft = d - listeOnglets.clientWidth;
+    });
+  }
+  // Titres seulement (pendant la frappe, à la réception d'un texte ou d'un nom)
+  function majTitres() {
+    listeOnglets.querySelectorAll('.onglet').forEach(t => {
+      const o = parNom[t.dataset.n], s = t.querySelector('.titre');
+      if (s && s.textContent !== titre(o)) { s.textContent = titre(o); t.title = titre(o); }
+    });
+  }
+  const afficherNoms = majTitres;
+
+  // ---- Titre modifié sur place ----
+  function editerTitre(t, o) {
+    if (edition || glisse) return;
+    const s = t.querySelector('.titre'), champ = document.createElement('input');
+    champ.className = 'edition-titre';
+    champ.value = o.nom;
+    champ.placeholder = titreAuto(o) || 'Nom de l\'onglet';
+    champ.maxLength = 20;
+    champ.enterKeyHint = 'done';
+    champ.setAttribute('aria-label', 'Nom de l\'onglet');
+    const ajuster = () => { champ.size = Math.max(6, (champ.value || champ.placeholder).length + 1); };
+    ajuster();
+    edition = true;
+    s.replaceWith(champ);
+    champ.focus();
+    champ.select();
+    let fini = false;
+    const finir = valider => {
+      if (fini) return;
+      fini = true;
+      edition = false;
+      const nom = champ.value.slice(0, 20).trim();
+      if (valider && nom !== o.nom) { definirNom(o, nom, true); envoyerNom(o); }
+      afficherOnglets();
+    };
+    champ.oninput = ajuster;
+    champ.onkeydown = e => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); finir(true); if (!tactile) vue.focus(); }
+      if (e.key === 'Escape') { e.preventDefault(); finir(false); }
+    };
+    champ.onblur = () => finir(true);
+    champ.addEventListener('pointerdown', e => e.stopPropagation());
+    champ.onclick = e => e.stopPropagation();
+  }
+
+  // ---- Glisser pour réordonner ----
+  // Souris : on attrape et on déplace. Doigt : appui long (0,35 s), puis on glisse ;
+  // sans appui long, le doigt fait défiler les onglets.
+  function debutGlisser(e) {
+    if (e.button > 0 || edition || ordre.length < 2) return;
+    const t = e.currentTarget, x0 = e.clientX, y0 = e.clientY, souris = e.pointerType === 'mouse';
+    let enCours = false, minuteur = null;
+    const demarrer = () => {
+      enCours = true;
+      glisse = { t, prise: x0 - t.getBoundingClientRect().left };
+      t.classList.add('glisse');
+      try { t.setPointerCapture(e.pointerId); } catch {}
+      navigator.vibrate?.(15);
+    };
+    if (!souris) minuteur = setTimeout(demarrer, 350);
+    const bouger = ev => {
+      if (!enCours) {
+        const d = Math.hypot(ev.clientX - x0, ev.clientY - y0);
+        if (!souris) { if (d > 8) arreter(); return; } // c'est un défilement
+        if (Math.abs(ev.clientX - x0) < 6) return;
+        demarrer();
+      }
+      ev.preventDefault();
+      const freres = [...listeOnglets.children], i = freres.indexOf(t), avant = freres[i - 1], apres = freres[i + 1];
+      const milieu = el => { const r = el.getBoundingClientRect(); return r.left + r.width / 2; };
+      if (apres && ev.clientX > milieu(apres)) listeOnglets.insertBefore(apres, t);
+      else if (avant && ev.clientX < milieu(avant)) listeOnglets.insertBefore(t, avant);
+      t.style.transform = '';
+      t.style.transform = `translateX(${ev.clientX - glisse.prise - t.getBoundingClientRect().left}px)`;
+    };
+    const arreter = () => {
+      clearTimeout(minuteur);
+      removeEventListener('pointermove', bouger);
+      removeEventListener('pointerup', finir);
+      removeEventListener('pointercancel', finir);
+    };
+    const finir = () => {
+      arreter();
+      if (!enCours) return;
+      t.classList.remove('glisse');
+      t.style.transform = '';
+      glisse = null;
+      aGlisse = true;
+      setTimeout(() => { aGlisse = false; }, 60);
+      const nouvel = [...listeOnglets.children].map(x => x.dataset.n);
+      if (nouvel.join() !== ordre.join()) modifierOrdre(l => [...nouvel.filter(n => l.includes(n)), ...l.filter(n => !nouvel.includes(n))]);
+      else afficherOnglets();
+    };
+    addEventListener('pointermove', bouger, { passive: false });
+    addEventListener('pointerup', finir);
+    addEventListener('pointercancel', finir);
+  }
+  listeOnglets.addEventListener('touchmove', e => { if (glisse) e.preventDefault(); }, { passive: false });
+
+  // ---- Ordre des onglets : modifié ici aussitôt, puis envoyé (conditionnel, rejoué si conflit) ----
+  let etagOrdre = null, operationsOrdre = [], envoiOrdre = false;
+  window.noteOrdre = () => ({ ordre: ordre.join(), operations: operationsOrdre.length, envoi: envoiOrdre }); // pour les tests
+  function enregistrerOrdre(l) {
+    const ancienIndex = ordre.indexOf(actif.numero);
+    ordre = l;
+    stock.ecrire(cacheOrdre, JSON.stringify(l));
+    if (!ordre.includes(actif.numero)) choisir(parNom[ordre[Math.min(Math.max(ancienIndex, 0), ordre.length - 1)]]);
+    else afficherOnglets();
+  }
+  function modifierOrdre(operation) {
+    enregistrerOrdre(validerOrdre(operation(ordre.slice())));
+    operationsOrdre.push(operation);
+    envoyerOrdre();
+  }
+  async function envoyerOrdre() {
+    if (envoiOrdre || !operationsOrdre.length) return;
+    envoiOrdre = true;
+    let ok = false;
+    try {
+      for (let essai = 0; essai < 8 && !ok; essai++) {
+        const r = await fetch(`${urlOrdre}?t=${Date.now()}`, { cache: 'no-store', headers: entetesLecture });
+        if (!r.ok) throw new Error(r.status);
+        const brut = await r.json(), etag = r.headers.get('ETag');
+        let serveur = null;
+        try { serveur = typeof brut === 'string' ? validerOrdre(JSON.parse(brut)) : null; } catch {}
+        const ops = operationsOrdre.slice();
+        const nouvel = serveur && serveur.length ? validerOrdre(ops.reduce((l, f) => f(l.slice()), serveur)) : ordre.slice();
+        const e = await fetch(urlOrdre, {
+          method: 'PUT', headers: etag ? { ...entetesLecture, 'if-match': etag } : entetesLecture,
+          body: JSON.stringify(JSON.stringify(nouvel)),
+        });
+        if (e.status === 412) continue;
+        if (!e.ok) throw new Error(e.status);
+        etagOrdre = e.headers.get('ETag');
+        operationsOrdre = operationsOrdre.slice(ops.length);
+        if (!operationsOrdre.length && nouvel.join() !== ordre.join()) enregistrerOrdre(nouvel);
+        ok = true;
+      }
+    } catch {} finally { envoiOrdre = false; }
+    if (operationsOrdre.length) setTimeout(envoyerOrdre, ok ? 0 : 3000);
+  }
+  async function lireOrdre() {
+    if (operationsOrdre.length) { envoyerOrdre(); return; }
+    const entetes = etagOrdre ? { ...entetesLecture, 'if-none-match': etagOrdre } : entetesLecture;
+    const r = await fetch(`${urlOrdre}?t=${Date.now()}`, { cache: 'no-store', headers: entetes });
+    if (r.status === 304 || !r.ok) return;
+    const brut = await r.json();
+    etagOrdre = r.headers.get('ETag');
+    if (operationsOrdre.length || glisse || edition) return;
+    let l = null;
+    try { l = typeof brut === 'string' ? validerOrdre(JSON.parse(brut)) : null; } catch {}
+    if (l && l.length && l.join() !== ordre.join()) enregistrerOrdre(l);
+  }
+
+  // ---- Nouvel onglet, fermer ----
+  // Vide un emplacement (texte, nom, images), sur le serveur aussi
+  async function viderEmplacement(o) {
+    clearTimeout(o.minuteur);
+    o.etag = null;
+    oublierPeutEtre(o);
+    const ids = [...o.images, ...o.locales].map(x => x.id);
+    definir(o, { texte: '', depart: '' });
+    definirNom(o, '', false);
+    const effacer = url => fetch(url, { method: 'PUT', body: 'null' }).catch(() => {});
+    await Promise.all([effacer(o.url), effacer(o.urlNom), ids.length ? supprimerImages(o, ids).catch(() => {}) : effacer(o.urlIndex)]);
+  }
+
+  async function nouvelOnglet() {
+    if (ordre.length >= MAX_ONGLETS) { annoncer(`${MAX_ONGLETS} onglets au plus`); return; }
+    const n = EMPLACEMENTS.find(x => !ordre.includes(x)), o = parNom[n];
+    await viderEmplacement(o); // un ancien contenu (onglet fermé ailleurs) ne doit pas réapparaître
+    modifierOrdre(l => l.includes(n) || l.length >= MAX_ONGLETS ? l : [...l, n]);
+    choisir(o);
+    vue.focus();
+  }
+  document.getElementById('nouvel-onglet').addEventListener('mousedown', e => e.preventDefault());
+  document.getElementById('nouvel-onglet').onclick = nouvelOnglet;
+
+  function fermerOnglet(o) {
+    if (ordre.length < 2) return;
+    const idx = ordre.indexOf(o.numero), nom = titre(o);
+    if (o === actif) choisir(parNom[ordre[idx + 1] || ordre[idx - 1]]);
+    modifierOrdre(l => l.length > 1 ? l.filter(x => x !== o.numero) : l);
+    const purge = setTimeout(() => { if (!ordre.includes(o.numero)) viderEmplacement(o); }, DELAI_ANNULER);
+    annoncer(`Onglet « ${nom} » fermé`, {
+      texte: 'Annuler', duree: DELAI_ANNULER,
+      faire: () => {
+        clearTimeout(purge);
+        modifierOrdre(l => l.includes(o.numero) || l.length >= MAX_ONGLETS ? l : [...l.slice(0, idx), o.numero, ...l.slice(idx)]);
+        choisir(o);
+      },
+    });
+  }
+
+  // ---- Noms (synchronisés, rarement modifiés : lus toutes les 10 s) ----
   function definirNom(o, nom, aEnvoyer) {
     o.nom = nom;
     o.nomAEnvoyer = aEnvoyer;
     stock.ecrire(o.cache + ':nom', nom);
     stock.ecrire(o.cache + ':nom-a-envoyer', aEnvoyer ? '1' : '');
-    afficherNoms();
+    majTitres();
   }
 
+  // Noms de tous les onglets ouverts, et leurs notes (pour les titres automatiques et un changement
+  // d'onglet instantané) ; une requête à la fois, réponses « 304 inchangé » pour les notes
+  let lectureNoms = false;
   async function lireNoms() {
-    if (document.hidden) return;
-    await Promise.all(onglets.map(async o => {
-      if (o.nomAEnvoyer) return envoyerNom(o);
-      try {
-        const r = await fetch(`${o.urlNom}?t=${Date.now()}`, { cache: 'no-store' });
-        if (!r.ok) return;
-        const nom = await r.json();
-        if (!o.nomAEnvoyer) definirNom(o, typeof nom === 'string' ? nom : '', false);
-      } catch {}
-    }));
+    if (document.hidden || lectureNoms) return;
+    lectureNoms = true;
+    try {
+      for (const o of onglets.filter(x => ordre.includes(x.numero) || x.nomAEnvoyer)) {
+        if (o.nomAEnvoyer) { await envoyerNom(o); continue; }
+        try {
+          const r = await fetch(`${o.urlNom}?t=${Date.now()}`, { cache: 'no-store' });
+          if (r.ok) {
+            const nom = await r.json();
+            if (!o.nomAEnvoyer) definirNom(o, typeof nom === 'string' ? nom : '', false);
+          }
+          if (o !== actif && !o.occupe && ordre.includes(o.numero)) await lire(o);
+        } catch {}
+      }
+    } finally { lectureNoms = false; }
   }
 
   async function envoyerNom(o) {
@@ -923,39 +1236,21 @@
 
   setInterval(lireNoms, 10000);
 
-  async function renommer(o) {
-    const r = await popup({
-      message: `Nom de l'onglet ${o.numero} (vide = « ${o.numero} »)`,
-      valeurChamp: o.nom,
-      longueurMax: 20,
-      boutons: [{ texte: 'Annuler', classe: 'annuler', valeur: false }, { texte: 'Renommer', classe: 'principal', valeur: true }],
-    });
-    if (!r.valeur) return;
-    const nom = r.champ.slice(0, 20).trim();
-    if (nom === o.nom) return;
-    definirNom(o, nom, true);
-    envoyerNom(o);
-  }
-
   // ---- Interface ----
   function choisir(o) {
     if (typeof finirSuite === 'function' && suite) finirSuite();
     actif = o;
-    boutonsOnglets.forEach((b, i) => b.setAttribute('aria-selected', onglets[i] === o));
     chargerTexte(o.texte);
     afficherImages();
-    stock.ecrire(ESPACE + 'onglet', onglets.indexOf(o));
+    stock.ecrire(ESPACE + 'onglet-n', o.numero);
+    afficherOnglets();
     ecouter(o);
   }
-
-  // Toucher l'onglet déjà affiché permet de le renommer
-  boutonsOnglets.forEach((b, i) => b.onclick = () => {
-    if (onglets[i] !== actif) choisir(onglets[i]); else renommer(actif);
-  });
 
   surSaisie.push(() => {
     definir(actif, { texte: note.value });
     planifier(actif);
+    majTitres();
   });
 
   // ---- Puces et numérotation ----
@@ -1968,7 +2263,7 @@
   majCouleurBarre();
 
   const supprimer = url => fetch(url, { method: 'PUT', body: 'null' }).then(r => { if (!r.ok) throw new Error(r.status); });
-  const INDEX_TOUS = ['1', '2', '3', '4', '5'].flatMap(n => ['i' + n, 'ti' + n]); // appli normale et page de test
+  const INDEX_TOUS = EMPLACEMENTS.flatMap(n => ['i' + n, 'ti' + n]); // appli normale et page de test
 
   function oublierImagesLocales() {
     imagesCompletes.clear();
@@ -1999,6 +2294,9 @@
       definir(o, { texte: '', depart: '' });
       definirNom(o, '', false);
     });
+    operationsOrdre = [];
+    etagOrdre = null;
+    enregistrerOrdre(ORDRE_DEFAUT.slice());
   }
 
   document.getElementById('reglages').onclick = async () => {
@@ -2043,7 +2341,6 @@
     }
   };
 
-  afficherNoms();
   onglets.forEach(telechargerImages);
   choisir(actif);
   lireNoms();

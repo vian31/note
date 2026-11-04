@@ -19,6 +19,9 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
+  // Données (notes, images) et flux en direct : jamais interceptés (un flux relayé ici resterait
+  // ouvert après sa fermeture par la page)
+  if (/\/(notes|images)\//.test(url.pathname) || e.request.headers.get('accept') === 'text/event-stream') return;
   e.respondWith(
     fetch(e.request, { cache: 'no-cache' })
       .then(r => {
