@@ -6,7 +6,7 @@ captures d'écran. Aucune authentification : un lien secret donne accès au bloc
 
 <https://vian31.github.io/note/> — « Ajouter à l'écran d'accueil » pour l'installer.
 
-**Version actuelle : v0.5** (affichée en tête de ⚙ Réglages : vérifier que chaque appareil a la même ;
+**Version actuelle : v0.5.1** (affichée en tête de ⚙ Réglages : vérifier que chaque appareil a la même ;
 sinon, fermer et rouvrir l'appli, ou Ctrl+F5 sur PC).
 
 GitHub Pages ne sert que des fichiers statiques : la synchronisation passe par une
@@ -101,7 +101,7 @@ les règles Firebase interdisent de lister la base.
 - **Règles Firebase** (`database.rules.json`) : notes `notes/<clé>/{1…5}`, noms `n1…`, index
   d'images `i1…` ; images `images/<clé>/<id>/<morceau>`. Sur un bloc-notes entier, seule la
   suppression est autorisée.
-- **Page de test (v0.6)** : onglets façon navigateur, jusqu'à 10 : **+** pour ouvrir, **×** pour fermer
+- **Page de test (v0.6.1)** : onglets façon navigateur, jusqu'à 10 : **+** pour ouvrir, **×** pour fermer
   (Annuler pendant 5 s), glisser pour réordonner (souris ; au doigt : appui long puis glisser),
   toucher l'onglet affiché pour renommer sur place ; sans nom, le titre est la 1re ligne de la note.
   Ordre synchronisé (`notes/<clé>/ordre`), 10 emplacements de notes. Version dans le titre de la page.

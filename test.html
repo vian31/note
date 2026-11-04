@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="referrer" content="no-referrer">
-<title>Note v0.6 (test)</title>
+<title>Note v0.6.1 (test)</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#ffffff">
 <script>
   // Version de l'appli : affichée dans ⚙ Réglages (vérifier que tous les appareils ont la même)
-  window.VERSION_NOTE = 'v0.6';
+  window.VERSION_NOTE = 'v0.6.1';
   document.title = 'Note ' + window.VERSION_NOTE + (/test\.html$/.test(location.pathname) ? ' (test)' : '');
   // Thème choisi dans les réglages, appliqué avant l'affichage (pas de flash)
   try { const t = localStorage.getItem('theme'); if (t === 'clair' || t === 'sombre') document.documentElement.dataset.theme = t; } catch {}
@@ -529,6 +529,10 @@
       surSaisie.forEach(f => f());
     }),
   ];
+  // Saisie classique (contenteditable) plutôt que l'API EditContext de Chrome : après un changement
+  // d'onglet (vue.setState), EditContext garde l'ancien texte et refuse ensuite toute frappe
+  // (« Invalid change range ») dans un onglet plus court, vide par exemple
+  EditorView.EDIT_CONTEXT = false;
   const vue = new EditorView({ state: EditorState.create({ doc: '', extensions: extensions() }), parent: document.getElementById('zone') });
 
   const borner = n => Math.max(0, Math.min(n, vue.state.doc.length));

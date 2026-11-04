@@ -11,7 +11,7 @@
 <meta name="theme-color" content="#ffffff">
 <script>
   // Version de l'appli : affichée dans ⚙ Réglages (vérifier que tous les appareils ont la même)
-  window.VERSION_NOTE = 'v0.5';
+  window.VERSION_NOTE = 'v0.5.1';
   // Thème choisi dans les réglages, appliqué avant l'affichage (pas de flash)
   try { const t = localStorage.getItem('theme'); if (t === 'clair' || t === 'sombre') document.documentElement.dataset.theme = t; } catch {}
   // Filet de sécurité : si une erreur bloque l'appli au démarrage (par exemple un fichier resté en
@@ -493,6 +493,10 @@
       surSaisie.forEach(f => f());
     }),
   ];
+  // Saisie classique (contenteditable) plutôt que l'API EditContext de Chrome : après un changement
+  // d'onglet (vue.setState), EditContext garde l'ancien texte et refuse ensuite toute frappe
+  // (« Invalid change range ») dans un onglet plus court, vide par exemple
+  EditorView.EDIT_CONTEXT = false;
   const vue = new EditorView({ state: EditorState.create({ doc: '', extensions: extensions() }), parent: document.getElementById('zone') });
 
   const borner = n => Math.max(0, Math.min(n, vue.state.doc.length));
