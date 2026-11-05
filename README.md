@@ -104,8 +104,9 @@ les règles Firebase interdisent de lister la base.
 - **Règles Firebase** (`database.rules.json`) : notes `notes/<clé>/{1…10}`, noms `n1…`, index
   d'images `i1…`, ordre des onglets `ordre` ; images `images/<clé>/<id>/<morceau>`. Sur un bloc-notes entier, seule la
   suppression est autorisée.
-- **Page de test (v0.8) : fichiers joints.** 📎, glisser-déposer ou Ctrl+V d'un fichier copié
-  dans l'explorateur.
+- **Page de test (v0.9) : pièces jointes.** Un seul bouton **📎** (remplace 🖼) pour les images
+  (galerie, appareil photo), les fichiers texte et les archives ; aussi par glisser-déposer ou Ctrl+V
+  d'un fichier copié dans l'explorateur.
   - **Fichiers texte** : code, `.txt`, `.json`, `.html`, `.js`, `.md`, `.csv`, `.svg`… (1 Mo au plus).
     **Copier** ajoute leur contenu après la note, dans `<document nom="…">…</document>`. Carte 📄 :
     Télécharger, Partager (téléphone), Copier le contenu, Insérer dans la note, Supprimer.
