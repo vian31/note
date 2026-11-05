@@ -104,11 +104,15 @@ les règles Firebase interdisent de lister la base.
 - **Règles Firebase** (`database.rules.json`) : notes `notes/<clé>/{1…10}`, noms `n1…`, index
   d'images `i1…`, ordre des onglets `ordre` ; images `images/<clé>/<id>/<morceau>`. Sur un bloc-notes entier, seule la
   suppression est autorisée.
-- **Page de test (v0.7) : fichiers texte joints.** 📎, glisser-déposer ou Ctrl+V d'un fichier copié
-  dans l'explorateur : code, `.txt`, `.json`, `.html`, `.js`, `.md`, `.csv`, `.svg`… (1 Mo et 10 fichiers
-  au plus par onglet ; PDF, archives et autres binaires refusés). Carte `📄 nom · taille` synchronisée ;
-  la toucher : Télécharger, Partager (téléphone), Copier le contenu, Insérer dans la note, Supprimer.
-  **Copier** ajoute le contenu de chaque fichier après la note, dans `<document nom="…">…</document>`.
-  Rangés comme les images (mêmes règles Firebase).
+- **Page de test (v0.8) : fichiers joints.** 📎, glisser-déposer ou Ctrl+V d'un fichier copié
+  dans l'explorateur.
+  - **Fichiers texte** : code, `.txt`, `.json`, `.html`, `.js`, `.md`, `.csv`, `.svg`… (1 Mo au plus).
+    **Copier** ajoute leur contenu après la note, dans `<document nom="…">…</document>`. Carte 📄 :
+    Télécharger, Partager (téléphone), Copier le contenu, Insérer dans la note, Supprimer.
+  - **Archives** : `.zip`, `.7z`, `.rar`, `.tar`, `.gz`, `.tgz`, `.bz2`, `.xz`, `.zst` (10 Mo au plus).
+    Carte 🗜 avec progression de l'envoi ; téléchargées seulement à l'ouverture sur les autres
+    appareils ; Télécharger, Partager, Supprimer. Non incluses dans Copier (le message le signale).
+  - 10 fichiers au plus par onglet ; PDF et autres binaires refusés. Rangés comme les images
+    (mêmes règles Firebase).
 - **Page de test** : <https://vian31.github.io/note/test.html>, même code avec ses données rangées
   à part (`t1…`, `tn1…`, `ti1…`), pour essayer une nouveauté sans toucher aux vraies notes.

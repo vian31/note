@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="referrer" content="no-referrer">
-<title>Note v0.7 (test)</title>
+<title>Note v0.8 (test)</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#ffffff">
 <script>
   // Version de l'appli : affichée dans ⚙ Réglages (vérifier que tous les appareils ont la même)
-  window.VERSION_NOTE = 'v0.7';
+  window.VERSION_NOTE = 'v0.8';
   document.title = 'Note ' + window.VERSION_NOTE + (/test\.html$/.test(location.pathname) ? ' (test)' : '');
   // Thème choisi dans les réglages, appliqué avant l'affichage (pas de flash)
   try { const t = localStorage.getItem('theme'); if (t === 'clair' || t === 'sombre') document.documentElement.dataset.theme = t; } catch {}
@@ -286,7 +286,7 @@
     <button id="numeros" class="format petit" title="Liste numérotée (encore : sous-niveau)" aria-label="Liste numérotée">1.</button>
     <button id="code" class="format petit" title="Bloc de code" aria-label="Bloc de code">&lt;/&gt;</button>
     <button id="image" class="format petit" title="Insérer une image (galerie, appareil photo)" aria-label="Insérer une image">🖼</button>
-    <button id="joindre" class="format petit" title="Joindre un fichier texte (code, JSON, HTML, CSV…)" aria-label="Joindre un fichier">📎</button>
+    <button id="joindre" class="format petit" title="Joindre un fichier texte (code, JSON, HTML, CSV…) ou une archive (zip, 7z…)" aria-label="Joindre un fichier">📎</button>
     <button id="balise" class="format" title="Entourer d'une balise <nom>…</nom>" aria-label="Balise">Balise</button>
     <button id="modele" class="format" title="Insérer un modèle de prompt" aria-label="Modèle">Modèle</button>
     <input id="fichier" type="file" accept="image/*" multiple hidden>
@@ -692,7 +692,7 @@
   // Entrées d'index valides seulement (elles viennent du serveur)
   function validerIndex(liste) {
     return Array.isArray(liste) ? liste.filter(x => x && typeof x.id === 'string' && /^[\w-]{1,40}$/.test(x.id)
-      && Number.isInteger(x.n) && x.n >= 1 && x.n <= 200
+      && Number.isInteger(x.n) && x.n >= 1 && x.n <= 1000
       && (typeof x.f === 'string' ? x.f.length >= 1 && x.f.length <= 200 && Number.isInteger(x.o) // fichier texte
         : typeof x.mini === 'string' && x.mini.startsWith('data:image/'))) : [];
   }
@@ -1738,8 +1738,9 @@
       b.title = x.statut === 'erreur' ? 'Envoi impossible : toucher pour réessayer' : x.f ? `${x.f} : télécharger, copier, insérer…` : 'Voir l\'image';
       if (x.f) {
         const nom = document.createElement('span'), taille = document.createElement('span');
-        nom.className = 'nom'; nom.textContent = '📄 ' + x.f;
-        taille.className = 'taille'; taille.textContent = enKo(x.o);
+        nom.className = 'nom'; nom.textContent = (x.b ? '🗜 ' : '📄 ') + x.f;
+        taille.className = 'taille';
+        taille.textContent = x.statut === 'envoi' && x.progres !== undefined ? `envoi ${x.progres} %` : enKo(x.o);
         b.append(nom, taille);
       }
       if (x.mini) { const img = document.createElement('img'); img.src = x.mini; img.alt = ''; b.append(img); }
@@ -1749,7 +1750,7 @@
       croix.title = 'Supprimer ' + quoi;
       croix.setAttribute('role', 'button');
       croix.setAttribute('aria-label', 'Supprimer ' + quoi);
-      croix.onclick = e => { e.stopPropagation(); supprimerImagesDiffere(o, [x.id], x.f ? 'Fichier supprimé' : 'Image supprimée'); };
+      croix.onclick = e => { e.stopPropagation(); supprimerImagesDiffere(o, [x.id], x.b ? 'Archive supprimée' : x.f ? 'Fichier supprimé' : 'Image supprimée'); };
       b.append(croix);
       b.addEventListener('mousedown', e => e.preventDefault());
       b.onclick = () => x.statut === 'erreur' ? televerser(o, x) : x.f ? ouvrirFichier(o, x.id) : ouvrirImage(o, x.id);
@@ -1819,9 +1820,12 @@
       // après un échec, morceaux deux fois plus petits (proxy qui limiterait la taille des requêtes)
       const taille = local.taille ||= TAILLE_MORCEAU;
       const morceaux = decouper(local.donnees, taille);
-      for (let k = 0; k < morceaux.length; k++) await envoyerMorceau(urlMorceau(local.id, k), morceaux[k]);
+      for (let k = 0; k < morceaux.length; k++) {
+        await envoyerMorceau(urlMorceau(local.id, k), morceaux[k]);
+        if (morceaux.length > 3) { local.progres = Math.round((k + 1) * 100 / morceaux.length); if (o === actif) afficherImages(); }
+      }
       // l'image n'apparaît ailleurs qu'une fois tous ses morceaux arrivés
-      const entree = local.f ? { id: local.id, n: morceaux.length, f: local.f, o: local.o, t: local.t }
+      const entree = local.f ? { id: local.id, n: morceaux.length, f: local.f, o: local.o, t: local.t, ...(local.b ? { b: 1 } : {}) }
         : { id: local.id, n: morceaux.length, w: local.w, h: local.h, mini: local.mini, t: local.t };
       if (local.supprimee) return; // supprimée pendant l'envoi
       await modifierIndex(o, liste => liste.some(x => x.id === local.id) ? liste : [...liste, entree]);
@@ -1876,9 +1880,10 @@
 
   // Téléchargement des images complètes absentes de l'appareil
   const enTelechargement = new Set();
-  async function telechargerImages(o) {
+  // Les archives (lourdes) ne sont téléchargées qu'à la demande (idDemande)
+  async function telechargerImages(o, idDemande) {
     for (const im of o.images) {
-      if (imagesCompletes.has(im.id) || enTelechargement.has(im.id)) continue;
+      if (imagesCompletes.has(im.id) || enTelechargement.has(im.id) || (im.b && im.id !== idDemande)) continue;
       enTelechargement.add(im.id);
       try {
         let donnees = await idb.lire(im.id);
@@ -1887,7 +1892,7 @@
             fetch(`${urlMorceau(im.id, k)}?t=${Date.now()}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : Promise.reject(r.status))));
           if (morceaux.some(m => typeof m !== 'string')) throw new Error('incomplet');
           donnees = morceaux.join('');
-          if (!im.f && !donnees.startsWith('data:image/')) throw new Error('invalide');
+          if ((!im.f || im.b) && !donnees.startsWith('data:')) throw new Error('invalide');
           idb.ecrire(im.id, donnees);
         }
         imagesCompletes.set(im.id, donnees);
@@ -1968,8 +1973,13 @@
 
   // ---- Fichiers texte joints (code, JSON, HTML, CSV…) ----
   // Rangés comme les images (morceaux de texte, index de l'onglet) ; leur contenu est inclus dans
-  // Copier. PDF, archives et autres fichiers binaires sont refusés pour l'instant.
-  const MAX_FICHIERS = 10, MAX_OCTETS_FICHIER = 1024 * 1024;
+  // Copier. Les archives (zip, 7z…) sont rangées telles quelles (base64), à télécharger ou partager ;
+  // PDF et autres fichiers binaires sont refusés pour l'instant.
+  const MAX_FICHIERS = 10, MAX_OCTETS_FICHIER = 1024 * 1024, MAX_OCTETS_ARCHIVE = 10 * 1024 * 1024;
+  const ARCHIVE = /\.(zip|7z|rar|tar|gz|tgz|bz2|tbz2?|xz|txz|zst|tzst)$/i;
+  const TYPES_ARCHIVE = { zip: 'application/zip', '7z': 'application/x-7z-compressed', rar: 'application/vnd.rar', tar: 'application/x-tar',
+    gz: 'application/gzip', tgz: 'application/gzip', bz2: 'application/x-bzip2', xz: 'application/x-xz', zst: 'application/zstd' };
+  const typeArchive = nom => TYPES_ARCHIVE[nom.split('.').pop().toLowerCase()] || 'application/octet-stream';
   const enKo = n => n < 1024 ? `${n} o` : n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} Ko` : `${(n / 1048576).toFixed(1).replace('.', ',')} Mo`;
   const BINAIRE = /\.(pdf|zip|rar|7z|gz|tgz|bz2|xz|tar|jar|apk|exe|dll|so|dylib|bin|iso|dmg|docx?|xlsx?|pptx?|odt|ods|odp|epub|mp3|mp4|m4a|wav|ogg|mov|avi|mkv|webm|woff2?|ttf|otf|eot|ico|class|pyc|o|a|wasm|sqlite|db)$/i;
   // Image à réduire et afficher en vignette (le SVG, lui, est du texte)
@@ -1988,7 +1998,18 @@
     for (const fichier of fichiers) {
       const nom = (fichier.name || 'fichier.txt').slice(-200);
       if ([...o.images, ...o.locales].filter(x => x.f).length >= MAX_FICHIERS) { annoncer(`${MAX_FICHIERS} fichiers au plus par onglet`); break; }
-      if (fichier.size > MAX_OCTETS_FICHIER) { annoncer(`« ${nom} » : 1 Mo au plus par fichier`); continue; }
+      if (ARCHIVE.test(nom)) {
+        if (fichier.size > MAX_OCTETS_ARCHIVE) { annoncer(`« ${nom} » : 10 Mo au plus par archive`); continue; }
+        let donnees;
+        try { donnees = await enDataURL(new Blob([fichier], { type: typeArchive(nom) })); } catch { refuses.push(nom); continue; }
+        const local = { id: nouvelId(), statut: 'prep', t: instant(), f: nom, o: fichier.size, b: 1, donnees };
+        o.locales.push(local);
+        imagesCompletes.set(local.id, donnees);
+        idb.ecrire(local.id, donnees);
+        televerser(o, local);
+        continue;
+      }
+      if (fichier.size > MAX_OCTETS_FICHIER) { annoncer(`« ${nom} » : 1 Mo au plus par fichier texte`); continue; }
       const texte = BINAIRE.test(nom) ? null : await lireTexte(fichier).catch(() => null);
       if (texte === null) { refuses.push(nom); continue; }
       const local = { id: nouvelId(), statut: 'prep', t: instant(), f: nom, o: fichier.size, donnees: texte };
@@ -1998,32 +2019,60 @@
       televerser(o, local);
     }
     if (o === actif) afficherImages();
-    if (refuses.length) annoncer(`${refuses.length > 1 ? 'Fichiers refusés' : 'Fichier refusé'} : ${refuses.join(', ')} (seuls les fichiers texte sont acceptés : code, JSON, HTML, CSV…)`);
+    if (refuses.length) annoncer(`${refuses.length > 1 ? 'Fichiers refusés' : 'Fichier refusé'} : ${refuses.join(', ')} (acceptés : fichiers texte — code, JSON, HTML, CSV… — et archives zip, 7z, rar, tar, gz)`);
   }
 
   // Fichiers de l'onglet pour Copier : <document nom="…">contenu</document>, à la suite de la note
-  const fichiersDeOnglet = o => pieces(o).filter(x => x.f && !o.masquees.has(x.id));
+  const fichiersDeOnglet = o => pieces(o).filter(x => x.f && !x.b && !o.masquees.has(x.id));
+  const archivesDeOnglet = o => pieces(o).filter(x => x.b && !o.masquees.has(x.id));
   const blocFichier = (nom, contenu) => `<document nom="${nom.replace(/"/g, "'")}">\n${contenu.replace(/\r\n?/g, '\n').replace(/\s+$/, '')}\n</document>`;
   function texteAvecFichiers(o, texte) {
     const fichiers = fichiersDeOnglet(o), prets = fichiers.filter(x => imagesCompletes.has(x.id));
     const blocs = prets.map(x => blocFichier(x.f, imagesCompletes.get(x.id)));
-    return { texte: [texte, ...blocs].filter(Boolean).join('\n\n'), fichiers: prets.length, manquants: fichiers.length - prets.length };
+    return { texte: [texte, ...blocs].filter(Boolean).join('\n\n'), fichiers: prets.length, manquants: fichiers.length - prets.length, archives: archivesDeOnglet(o).length };
   }
 
   const fichierDe = (x, contenu) => new File([contenu], x.f, { type: /\.(json)$/i.test(x.f) ? 'application/json' : 'text/plain' });
-  function telechargerFichier(x, contenu) {
+  const telechargerFichier = (x, contenu) => enregistrerFichier(fichierDe(x, contenu));
+  function enregistrerFichier(fichier) {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(fichierDe(x, contenu));
-    a.download = x.f;
+    a.href = URL.createObjectURL(fichier);
+    a.download = fichier.name;
     document.body.append(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 60000);
   }
 
+  // Archive : fichier reconstruit à partir des données (base64), prêt avant le toucher sur Partager
+  async function ouvrirArchive(o, x) {
+    if (!imagesCompletes.has(x.id)) {
+      annoncer(`Téléchargement de « ${x.f} » (${enKo(x.o)})…`);
+      await telechargerImages(o, x.id);
+    }
+    const donnees = imagesCompletes.get(x.id);
+    if (donnees === undefined) { annoncer('Archive pas encore téléchargée (réseau) : réessayer'); return; }
+    const fichier = new File([await versBlob(donnees)], x.f, { type: typeArchive(x.f) });
+    let partageable = false;
+    try { partageable = tactile && !!navigator.canShare?.({ files: [fichier] }); } catch {}
+    const r = await popup({
+      message: `🗜 ${x.f} · ${enKo(x.o)}. Archive : à télécharger ou partager (son contenu n'est pas inclus dans Copier).`,
+      boutons: [
+        { texte: 'Supprimer', classe: 'danger', valeur: 'supprimer' },
+        ...(partageable ? [{ texte: 'Partager', valeur: 'partager' }] : []),
+        { texte: 'Fermer', classe: 'annuler', valeur: null },
+        { texte: 'Télécharger', classe: 'principal', valeur: 'telecharger' },
+      ],
+    });
+    if (r.valeur === 'telecharger') enregistrerFichier(fichier);
+    else if (r.valeur === 'partager') navigator.share({ files: [fichier] }).catch(() => {});
+    else if (r.valeur === 'supprimer') supprimerImagesDiffere(o, [x.id], 'Archive supprimée');
+  }
+
   async function ouvrirFichier(o, id) {
     const x = [...o.images, ...o.locales].find(y => y.id === id);
     if (!x) return;
+    if (x.b) return ouvrirArchive(o, x);
     if (!imagesCompletes.has(id)) await telechargerImages(o);
     const contenu = imagesCompletes.get(id);
     if (contenu === undefined) { annoncer('Fichier pas encore téléchargé (réseau)'); return; }
@@ -2320,10 +2369,11 @@
   boutonCopier.onclick = async () => {
     if (suite) return copierImageSuivante();
     const o = actif, nettoye = nettoyer(note.value), retires = nettoye.retires, images = imagesPretes(o);
-    const { texte, fichiers, manquants } = texteAvecFichiers(o, nettoye.texte);
+    const { texte, fichiers, manquants, archives } = texteAvecFichiers(o, nettoye.texte);
     const attendues = [...o.images, ...o.locales].filter(x => !x.f).length;
     const avecFichiers = fichiers ? ` · ${fichiers} fichier${fichiers > 1 ? 's' : ''} inclus` : '';
-    const sansFichiers = manquants ? ` · ${manquants} fichier${manquants > 1 ? 's' : ''} pas encore téléchargé${manquants > 1 ? 's' : ''} (non copié${manquants > 1 ? 's' : ''})` : '';
+    const sansFichiers = (manquants ? ` · ${manquants} fichier${manquants > 1 ? 's' : ''} pas encore téléchargé${manquants > 1 ? 's' : ''} (non copié${manquants > 1 ? 's' : ''})` : '')
+      + (archives ? ` · ${archives > 1 ? `${archives} archives non copiées` : 'archive non copiée'} (Partager ou Télécharger)` : '');
     if (!images.length) {
       await copier(texte);
       annoncer(attendues ? `Images pas encore téléchargées : texte copié seul${avecFichiers}${sansFichiers}`
