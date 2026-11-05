@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="referrer" content="no-referrer">
-<title>Note v0.6.2 (test)</title>
+<title>Note v0.7 (test)</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#ffffff">
 <script>
   // Version de l'appli : affichée dans ⚙ Réglages (vérifier que tous les appareils ont la même)
-  window.VERSION_NOTE = 'v0.6.2';
+  window.VERSION_NOTE = 'v0.7';
   document.title = 'Note ' + window.VERSION_NOTE + (/test\.html$/.test(location.pathname) ? ' (test)' : '');
   // Thème choisi dans les réglages, appliqué avant l'affichage (pas de flash)
   try { const t = localStorage.getItem('theme'); if (t === 'clair' || t === 'sombre') document.documentElement.dataset.theme = t; } catch {}
@@ -174,6 +174,15 @@
     content: ''; position: absolute; inset: 22px; border: 3px solid var(--texte); border-right-color: transparent;
     border-radius: 50%; animation: tourne 1s linear infinite;
   }
+  /* Fichier texte joint : carte avec nom et taille */
+  #images button.fichier {
+    width: auto; min-width: 96px; max-width: 190px; padding: 0 28px 0 10px; display: flex; flex-direction: column;
+    justify-content: center; align-items: flex-start; gap: 2px; text-align: left; font-size: 13px; line-height: 1.25;
+  }
+  #images .fichier .nom { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  #images .fichier .taille { opacity: .65; font-size: 12px; white-space: nowrap; }
+  #images .fichier.envoi { opacity: .6; }
+  #images .fichier.envoi::after { inset: auto 6px 6px auto; width: 12px; height: 12px; border-width: 2px; }
   #images .erreur { outline: 2px solid #d33; outline-offset: -2px; }
   #images .erreur::after { content: '↻'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 24px; color: #d33; }
   @keyframes tourne { to { transform: rotate(360deg); } }
@@ -186,6 +195,7 @@
   nav .fmt, nav .act { display: flex; gap: 5px; width: 100%; }
   nav button { flex: 1 1 0; min-width: 0; padding: 7px 6px; white-space: nowrap; }
   nav .fmt .petit { flex: 0 0 auto; min-width: 40px; }
+  @media (max-width: 400px) { nav .fmt .petit { min-width: 34px; } nav .fmt button { padding-left: 4px; padding-right: 4px; } }
   @media (max-width: 340px) { nav { font-size: 14px; } nav button { padding: 6px 3px; } nav .fmt .petit { min-width: 32px; } }
   /* Grand écran (PC) : colonne centrée façon feuille, boutons à leur taille naturelle,
      mise en forme à gauche et actions à droite */
@@ -276,9 +286,11 @@
     <button id="numeros" class="format petit" title="Liste numérotée (encore : sous-niveau)" aria-label="Liste numérotée">1.</button>
     <button id="code" class="format petit" title="Bloc de code" aria-label="Bloc de code">&lt;/&gt;</button>
     <button id="image" class="format petit" title="Insérer une image (galerie, appareil photo)" aria-label="Insérer une image">🖼</button>
+    <button id="joindre" class="format petit" title="Joindre un fichier texte (code, JSON, HTML, CSV…)" aria-label="Joindre un fichier">📎</button>
     <button id="balise" class="format" title="Entourer d'une balise <nom>…</nom>" aria-label="Balise">Balise</button>
     <button id="modele" class="format" title="Insérer un modèle de prompt" aria-label="Modèle">Modèle</button>
     <input id="fichier" type="file" accept="image/*" multiple hidden>
+    <input id="fichier-texte" type="file" multiple hidden>
   </div>
   <div class="act">
     <button id="effacer">Effacer</button>
@@ -327,7 +339,7 @@
   const historique = CM.history; // (« history » est déjà l'historique du navigateur)
   const distant = Annotation.define(); // modification venue d'un autre appareil (pas un geste ici)
   const CLOTURE = /^\s*```/;          // ligne d'ouverture ou de fermeture d'un bloc de code
-  const BALISE_OUVRE = /^<([A-Za-z][\w-]*)>\s*$/, BALISE_FERME = /^<\/([A-Za-z][\w-]*)>\s*$/;
+  const BALISE_OUVRE = /^<([A-Za-z][\w-]*)(?:\s+[^<>]*)?>\s*$/, BALISE_FERME = /^<\/([A-Za-z][\w-]*)>\s*$/;
   const TITRE = /^#{1,6}\s+\S/;       // titre Markdown (« ## Contexte »)
   const surSaisie = [];                // appelés après chaque modification faite ici
   let texteVue = null;                 // texte en cache (recalculé après une modification)
@@ -680,7 +692,9 @@
   // Entrées d'index valides seulement (elles viennent du serveur)
   function validerIndex(liste) {
     return Array.isArray(liste) ? liste.filter(x => x && typeof x.id === 'string' && /^[\w-]{1,40}$/.test(x.id)
-      && Number.isInteger(x.n) && x.n >= 1 && x.n <= 200 && typeof x.mini === 'string' && x.mini.startsWith('data:image/')) : [];
+      && Number.isInteger(x.n) && x.n >= 1 && x.n <= 200
+      && (typeof x.f === 'string' ? x.f.length >= 1 && x.f.length <= 200 && Number.isInteger(x.o) // fichier texte
+        : typeof x.mini === 'string' && x.mini.startsWith('data:image/'))) : [];
   }
 
   // ---- Notes ----
@@ -1710,24 +1724,35 @@
     return toBlob(c, 'image/png');
   }
 
+  // Images et fichiers de l'onglet, dans l'ordre d'ajout (pas dans l'ordre de fin d'envoi)
+  let horloge = 0;
+  const instant = () => horloge = Math.max(Date.now(), horloge + 1);
+  const pieces = o => [...o.images, ...o.locales].sort((a, b) => (a.t || 0) - (b.t || 0));
+
   function afficherImages() {
-    const o = actif, liste = [...o.images.map(x => ({ ...x, statut: 'ok' })), ...o.locales].filter(x => !o.masquees.has(x.id));
+    const o = actif, liste = pieces(o).map(x => x.statut ? x : { ...x, statut: 'ok' }).filter(x => !o.masquees.has(x.id));
     zoneImages.hidden = !liste.length;
     zoneImages.replaceChildren(...liste.map(x => {
-      const b = document.createElement('button');
-      b.className = x.statut === 'ok' ? '' : x.statut === 'erreur' ? 'erreur' : 'envoi';
-      b.title = x.statut === 'erreur' ? 'Envoi impossible : toucher pour réessayer' : 'Voir l\'image';
+      const b = document.createElement('button'), quoi = x.f ? 'le fichier' : 'l\'image';
+      b.className = (x.f ? 'fichier ' : '') + (x.statut === 'ok' ? '' : x.statut === 'erreur' ? 'erreur' : 'envoi');
+      b.title = x.statut === 'erreur' ? 'Envoi impossible : toucher pour réessayer' : x.f ? `${x.f} : télécharger, copier, insérer…` : 'Voir l\'image';
+      if (x.f) {
+        const nom = document.createElement('span'), taille = document.createElement('span');
+        nom.className = 'nom'; nom.textContent = '📄 ' + x.f;
+        taille.className = 'taille'; taille.textContent = enKo(x.o);
+        b.append(nom, taille);
+      }
       if (x.mini) { const img = document.createElement('img'); img.src = x.mini; img.alt = ''; b.append(img); }
       const croix = document.createElement('span');
       croix.className = 'croix';
       croix.textContent = '×';
-      croix.title = 'Supprimer l\'image';
+      croix.title = 'Supprimer ' + quoi;
       croix.setAttribute('role', 'button');
-      croix.setAttribute('aria-label', 'Supprimer l\'image');
-      croix.onclick = e => { e.stopPropagation(); supprimerImagesDiffere(o, [x.id], 'Image supprimée'); };
+      croix.setAttribute('aria-label', 'Supprimer ' + quoi);
+      croix.onclick = e => { e.stopPropagation(); supprimerImagesDiffere(o, [x.id], x.f ? 'Fichier supprimé' : 'Image supprimée'); };
       b.append(croix);
       b.addEventListener('mousedown', e => e.preventDefault());
-      b.onclick = () => x.statut === 'erreur' ? televerser(o, x) : ouvrirImage(o, x.id);
+      b.onclick = () => x.statut === 'erreur' ? televerser(o, x) : x.f ? ouvrirFichier(o, x.id) : ouvrirImage(o, x.id);
       return b;
     }));
   }
@@ -1793,11 +1818,11 @@
     try {
       // après un échec, morceaux deux fois plus petits (proxy qui limiterait la taille des requêtes)
       const taille = local.taille ||= TAILLE_MORCEAU;
-      const morceaux = [];
-      for (let k = 0; k < local.donnees.length; k += taille) morceaux.push(local.donnees.slice(k, k + taille));
+      const morceaux = decouper(local.donnees, taille);
       for (let k = 0; k < morceaux.length; k++) await envoyerMorceau(urlMorceau(local.id, k), morceaux[k]);
       // l'image n'apparaît ailleurs qu'une fois tous ses morceaux arrivés
-      const entree = { id: local.id, n: morceaux.length, w: local.w, h: local.h, mini: local.mini, t: Date.now() };
+      const entree = local.f ? { id: local.id, n: morceaux.length, f: local.f, o: local.o, t: local.t }
+        : { id: local.id, n: morceaux.length, w: local.w, h: local.h, mini: local.mini, t: local.t };
       if (local.supprimee) return; // supprimée pendant l'envoi
       await modifierIndex(o, liste => liste.some(x => x.id === local.id) ? liste : [...liste, entree]);
       o.locales = o.locales.filter(x => x !== local);
@@ -1811,6 +1836,18 @@
     majEtat();
   }
 
+  // Morceaux de texte ; jamais coupés au milieu d'un caractère (emoji : deux unités UTF-16)
+  function decouper(texte, taille) {
+    const morceaux = [];
+    for (let k = 0; k < texte.length;) {
+      let fin = Math.min(texte.length, k + taille);
+      if (fin < texte.length && /[\uD800-\uDBFF]/.test(texte[fin - 1])) fin--;
+      morceaux.push(texte.slice(k, fin));
+      k = fin;
+    }
+    return morceaux.length ? morceaux : [''];
+  }
+
   function reessayerImages() {
     onglets.forEach(o => o.locales.forEach(x => { if (x.statut === 'erreur') televerser(o, x); }));
   }
@@ -1819,8 +1856,8 @@
   async function ajouterImages(blobs) {
     const o = actif;
     for (const blob of blobs) {
-      if (o.images.length + o.locales.length >= MAX_IMAGES) { annoncer(`${MAX_IMAGES} images au plus par onglet`); break; }
-      const local = { id: nouvelId(), statut: 'prep' };
+      if ([...o.images, ...o.locales].filter(x => !x.f).length >= MAX_IMAGES) { annoncer(`${MAX_IMAGES} images au plus par onglet`); break; }
+      const local = { id: nouvelId(), statut: 'prep', t: instant() };
       o.locales.push(local);
       if (o === actif) afficherImages();
       try {
@@ -1850,7 +1887,7 @@
             fetch(`${urlMorceau(im.id, k)}?t=${Date.now()}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : Promise.reject(r.status))));
           if (morceaux.some(m => typeof m !== 'string')) throw new Error('incomplet');
           donnees = morceaux.join('');
-          if (!donnees.startsWith('data:image/')) throw new Error('invalide');
+          if (!im.f && !donnees.startsWith('data:image/')) throw new Error('invalide');
           idb.ecrire(im.id, donnees);
         }
         imagesCompletes.set(im.id, donnees);
@@ -1861,7 +1898,7 @@
   }
 
   // Images de l'onglet prêtes à être copiées (dans l'ordre d'affichage)
-  const imagesPretes = o => [...o.images, ...o.locales].filter(x => !o.masquees.has(x.id)).map(x => imagesCompletes.get(x.id)).filter(Boolean);
+  const imagesPretes = o => pieces(o).filter(x => !x.f && !o.masquees.has(x.id)).map(x => imagesCompletes.get(x.id)).filter(Boolean);
 
   async function supprimerImages(o, ids) {
     const locales = o.locales.filter(x => ids.includes(x.id));
@@ -1929,6 +1966,102 @@
     } catch { annoncer('Copie d\'image refusée par le navigateur'); }
   };
 
+  // ---- Fichiers texte joints (code, JSON, HTML, CSV…) ----
+  // Rangés comme les images (morceaux de texte, index de l'onglet) ; leur contenu est inclus dans
+  // Copier. PDF, archives et autres fichiers binaires sont refusés pour l'instant.
+  const MAX_FICHIERS = 10, MAX_OCTETS_FICHIER = 1024 * 1024;
+  const enKo = n => n < 1024 ? `${n} o` : n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} Ko` : `${(n / 1048576).toFixed(1).replace('.', ',')} Mo`;
+  const BINAIRE = /\.(pdf|zip|rar|7z|gz|tgz|bz2|xz|tar|jar|apk|exe|dll|so|dylib|bin|iso|dmg|docx?|xlsx?|pptx?|odt|ods|odp|epub|mp3|mp4|m4a|wav|ogg|mov|avi|mkv|webm|woff2?|ttf|otf|eot|ico|class|pyc|o|a|wasm|sqlite|db)$/i;
+  // Image à réduire et afficher en vignette (le SVG, lui, est du texte)
+  const estImage = f => f.type.startsWith('image/') && f.type !== 'image/svg+xml';
+
+  // Contenu texte d'un fichier, ou null s'il est binaire (octet nul) ; UTF-8, sinon Windows-1252
+  async function lireTexte(fichier) {
+    const octets = new Uint8Array(await fichier.arrayBuffer());
+    if (octets.subarray(0, 65536).includes(0)) return null;
+    try { return new TextDecoder('utf-8', { fatal: true }).decode(octets); } catch {}
+    return new TextDecoder('windows-1252').decode(octets);
+  }
+
+  async function ajouterFichiers(fichiers) {
+    const o = actif, refuses = [];
+    for (const fichier of fichiers) {
+      const nom = (fichier.name || 'fichier.txt').slice(-200);
+      if ([...o.images, ...o.locales].filter(x => x.f).length >= MAX_FICHIERS) { annoncer(`${MAX_FICHIERS} fichiers au plus par onglet`); break; }
+      if (fichier.size > MAX_OCTETS_FICHIER) { annoncer(`« ${nom} » : 1 Mo au plus par fichier`); continue; }
+      const texte = BINAIRE.test(nom) ? null : await lireTexte(fichier).catch(() => null);
+      if (texte === null) { refuses.push(nom); continue; }
+      const local = { id: nouvelId(), statut: 'prep', t: instant(), f: nom, o: fichier.size, donnees: texte };
+      o.locales.push(local);
+      imagesCompletes.set(local.id, texte);
+      idb.ecrire(local.id, texte);
+      televerser(o, local);
+    }
+    if (o === actif) afficherImages();
+    if (refuses.length) annoncer(`${refuses.length > 1 ? 'Fichiers refusés' : 'Fichier refusé'} : ${refuses.join(', ')} (seuls les fichiers texte sont acceptés : code, JSON, HTML, CSV…)`);
+  }
+
+  // Fichiers de l'onglet pour Copier : <document nom="…">contenu</document>, à la suite de la note
+  const fichiersDeOnglet = o => pieces(o).filter(x => x.f && !o.masquees.has(x.id));
+  const blocFichier = (nom, contenu) => `<document nom="${nom.replace(/"/g, "'")}">\n${contenu.replace(/\r\n?/g, '\n').replace(/\s+$/, '')}\n</document>`;
+  function texteAvecFichiers(o, texte) {
+    const fichiers = fichiersDeOnglet(o), prets = fichiers.filter(x => imagesCompletes.has(x.id));
+    const blocs = prets.map(x => blocFichier(x.f, imagesCompletes.get(x.id)));
+    return { texte: [texte, ...blocs].filter(Boolean).join('\n\n'), fichiers: prets.length, manquants: fichiers.length - prets.length };
+  }
+
+  const fichierDe = (x, contenu) => new File([contenu], x.f, { type: /\.(json)$/i.test(x.f) ? 'application/json' : 'text/plain' });
+  function telechargerFichier(x, contenu) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(fichierDe(x, contenu));
+    a.download = x.f;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  }
+
+  async function ouvrirFichier(o, id) {
+    const x = [...o.images, ...o.locales].find(y => y.id === id);
+    if (!x) return;
+    if (!imagesCompletes.has(id)) await telechargerImages(o);
+    const contenu = imagesCompletes.get(id);
+    if (contenu === undefined) { annoncer('Fichier pas encore téléchargé (réseau)'); return; }
+    const lignes = contenu.replace(/\r?\n$/, '').split('\n').length;
+    let partageable = false;
+    try { partageable = tactile && !!navigator.canShare?.({ files: [fichierDe(x, contenu)] }); } catch {}
+    const r = await popup({
+      message: `📄 ${x.f} · ${enKo(x.o)} · ${lignes} ligne${lignes > 1 ? 's' : ''}. Son contenu est inclus dans Copier, à la suite de la note.`,
+      boutons: [
+        { texte: 'Supprimer', classe: 'danger', valeur: 'supprimer' },
+        { texte: 'Insérer dans la note', valeur: 'inserer' },
+        { texte: 'Copier le contenu', valeur: 'copier' },
+        ...(partageable ? [{ texte: 'Partager', valeur: 'partager' }] : []),
+        { texte: 'Fermer', classe: 'annuler', valeur: null },
+        { texte: 'Télécharger', classe: 'principal', valeur: 'telecharger' },
+      ],
+    });
+    if (r.valeur === 'telecharger') telechargerFichier(x, contenu);
+    else if (r.valeur === 'partager') navigator.share({ files: [fichierDe(x, contenu)] }).catch(() => {});
+    else if (r.valeur === 'copier') { await copier(blocFichier(x.f, contenu)); annoncer('Contenu copié ✓'); }
+    else if (r.valeur === 'supprimer') supprimerImagesDiffere(o, [id], 'Fichier supprimé');
+    else if (r.valeur === 'inserer' && o === actif) {
+      // inséré sur une nouvelle ligne, puis le fichier est retiré (son contenu est dans la note)
+      const fin = note.value.length, avant = fin && !note.value.endsWith('\n') ? '\n\n' : fin ? '\n' : '';
+      remplacer(fin, fin, avant + blocFichier(x.f, contenu) + '\n');
+      supprimerImagesDiffere(o, [id], 'Fichier inséré dans la note');
+    }
+  }
+
+  // 📎 : choisir des fichiers texte
+  const choixTexte = document.getElementById('fichier-texte');
+  document.getElementById('joindre').onclick = () => choixTexte.click();
+  choixTexte.onchange = () => {
+    const fichiers = [...choixTexte.files];
+    choixTexte.value = '';
+    if (fichiers.length) ajouterFichiers(fichiers);
+  };
+
   // Images glissées ou collées dans la zone de texte
   const imagesDuHtml = html => [...(html || '').matchAll(/<img[^>]+src=["'](data:image\/[^"']+)["']/gi)].map(m => m[1]);
   // Collage : images ajoutées à l'onglet ; du code est entouré de ``` ; le reste est collé tel quel
@@ -1937,9 +2070,10 @@
     if (!cd) return false;
     const texte = cd.getData('text/plain');
     const duHtml = imagesDuHtml(cd.getData('text/html'));
-    const fichiers = [...cd.files].filter(f => f.type.startsWith('image/'));
+    const fichiers = [...cd.files].filter(estImage), autres = [...cd.files].filter(f => !estImage(f));
     if (duHtml.length) Promise.all(duHtml.map(versBlob)).then(ajouterImages); // copié depuis cette appli : toutes les images
     else if (fichiers.length) ajouterImages(fichiers);
+    if (autres.length) { e.preventDefault(); ajouterFichiers(autres); return true; } // fichier copié dans l'explorateur
     if (!texte) { if (duHtml.length || fichiers.length) { e.preventDefault(); return true; } return false; }
     const lignes = note.value.split('\n'), { estCode } = blocsDeCode(lignes);
     const [i] = pointer(lignes, note.selectionStart);
@@ -1952,10 +2086,12 @@
     return false; // collage normal par l'éditeur (dans un bloc qui deviendra peut-être une vignette)
   }
   function surDepot(e) {
-    const fichiers = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
-    if (!fichiers.length) return false;
+    const tous = [...e.dataTransfer.files];
+    if (!tous.length) return false;
     e.preventDefault();
-    ajouterImages(fichiers);
+    const images = tous.filter(estImage), autres = tous.filter(f => !estImage(f));
+    if (images.length) ajouterImages(images);
+    if (autres.length) ajouterFichiers(autres);
     return true;
   }
 
@@ -2183,12 +2319,15 @@
 
   boutonCopier.onclick = async () => {
     if (suite) return copierImageSuivante();
-    const o = actif, { texte, retires } = nettoyer(note.value), images = imagesPretes(o);
-    const attendues = o.images.length + o.locales.length;
+    const o = actif, nettoye = nettoyer(note.value), retires = nettoye.retires, images = imagesPretes(o);
+    const { texte, fichiers, manquants } = texteAvecFichiers(o, nettoye.texte);
+    const attendues = [...o.images, ...o.locales].filter(x => !x.f).length;
+    const avecFichiers = fichiers ? ` · ${fichiers} fichier${fichiers > 1 ? 's' : ''} inclus` : '';
+    const sansFichiers = manquants ? ` · ${manquants} fichier${manquants > 1 ? 's' : ''} pas encore téléchargé${manquants > 1 ? 's' : ''} (non copié${manquants > 1 ? 's' : ''})` : '';
     if (!images.length) {
       await copier(texte);
-      annoncer(attendues ? 'Images pas encore téléchargées : texte copié seul'
-        : texte ? `Copié ✓${retires ? ` · ${retires} partie${retires > 1 ? 's' : ''} vide${retires > 1 ? 's' : ''} ignorée${retires > 1 ? 's' : ''}` : ''}` : 'Note vide');
+      annoncer(attendues ? `Images pas encore téléchargées : texte copié seul${avecFichiers}${sansFichiers}`
+        : texte ? `Copié ✓${avecFichiers}${retires ? ` · ${retires} partie${retires > 1 ? 's' : ''} vide${retires > 1 ? 's' : ''} ignorée${retires > 1 ? 's' : ''}` : ''}${sansFichiers}` : 'Note vide');
       return;
     }
     if (tactile && peutPartagerFichiers) {
@@ -2205,7 +2344,7 @@
     await copier(texte);
     boutonCopier.textContent = `🖼 1/${images.length}`;
     minuteurSuite = setTimeout(finirSuite, 120000);
-    annoncer(`Texte copié ✓ · ensuite : 🖼 1/${images.length}${images.length < attendues ? ' (images en téléchargement)' : ''}`);
+    annoncer(`Texte copié ✓${avecFichiers} · ensuite : 🖼 1/${images.length}${images.length < attendues ? ' (images en téléchargement)' : ''}${sansFichiers}`);
   };
 
   // Coller : texte au curseur (code entouré de ```), images ajoutées à l'onglet
@@ -2248,9 +2387,11 @@
     if (attenteEffacer) { clearTimeout(attenteEffacer); attenteEffacer = null; effacerOnglet(o); return; }
     attenteEffacer = setTimeout(async () => {
       attenteEffacer = null;
-      const n = [...o.images, ...o.locales].filter(x => !o.masquees.has(x.id)).length;
-      if (!note.value && !n) return;
-      const quoi = [note.value && 'le texte', n && `${n} image${n > 1 ? 's' : ''}`].filter(Boolean).join(' et ');
+      const restants = [...o.images, ...o.locales].filter(x => !o.masquees.has(x.id));
+      const n = restants.filter(x => !x.f).length, nf = restants.length - n;
+      if (!note.value && !restants.length) return;
+      const quoi = [note.value && 'le texte', n && `${n} image${n > 1 ? 's' : ''}`, nf && `${nf} fichier${nf > 1 ? 's' : ''}`]
+        .filter(Boolean).join(', ').replace(/, ([^,]*)$/, ' et $1');
       const r = await popup({
         message: `Effacer ${quoi} de « ${titre(o)} » sur tous les appareils ? (Astuce : un double appui sur Effacer efface sans demander.)`,
         boutons: [{ texte: 'Annuler', classe: 'annuler', valeur: false }, { texte: 'Effacer', classe: 'principal', valeur: true }],
@@ -2316,7 +2457,7 @@
       valeurChamp: lienSecret(cle),
       boutons: [
         { texte: `Thème : ${{ auto: 'auto', clair: 'clair', sombre: 'sombre' }[themeActuel()]}`, valeur: 'theme' },
-        { texte: 'Supprimer les images', classe: 'danger', valeur: 'images' },
+        { texte: 'Supprimer images et fichiers', classe: 'danger', valeur: 'images' },
         { texte: 'Tout effacer', classe: 'danger', valeur: 'tout' },
         { texte: 'Fermer', classe: 'annuler', valeur: false },
         { texte: 'Copier le lien', classe: 'principal', valeur: 'lien' },
@@ -2339,8 +2480,8 @@
     const tout = r.valeur === 'tout';
     const ok = await popup({
       message: tout
-        ? 'Tout effacer ? Les notes, les noms d\'onglets et les images de ce bloc-notes seront supprimés de la base, sur tous les appareils (appli normale comprise). C\'est définitif.'
-        : 'Supprimer toutes les images de ce bloc-notes, sur tous les appareils (appli normale comprise) ? Le texte des notes est conservé.',
+        ? 'Tout effacer ? Les notes, les noms d\'onglets, les images et les fichiers de ce bloc-notes seront supprimés de la base, sur tous les appareils (appli normale comprise). C\'est définitif.'
+        : 'Supprimer toutes les images et tous les fichiers joints de ce bloc-notes, sur tous les appareils (appli normale comprise) ? Le texte des notes est conservé.',
       boutons: [{ texte: 'Annuler', classe: 'annuler', valeur: false }, { texte: tout ? 'Tout effacer' : 'Supprimer', classe: 'principal', valeur: true }],
     });
     if (!ok.valeur) return;
