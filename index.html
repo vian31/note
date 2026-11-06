@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="referrer" content="no-referrer">
-<title>Note v0.6.2</title>
+<title>Note v0.9</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="theme-color" content="#ffffff">
 <script>
   // Version de l'appli : affichée dans ⚙ Réglages (vérifier que tous les appareils ont la même)
-  window.VERSION_NOTE = 'v0.6.2';
+  window.VERSION_NOTE = 'v0.9';
   document.title = 'Note ' + window.VERSION_NOTE + (/test\.html$/.test(location.pathname) ? ' (test)' : '');
   // Thème choisi dans les réglages, appliqué avant l'affichage (pas de flash)
   try { const t = localStorage.getItem('theme'); if (t === 'clair' || t === 'sombre') document.documentElement.dataset.theme = t; } catch {}
@@ -154,28 +154,37 @@
   #zone .cm-content ::selection, #zone .cm-content::selection { background: rgba(37, 99, 201, .3); }
 
   /* Vignettes des images de l'onglet */
-  #images {
+  #pieces {
     display: flex; gap: 8px; padding: 8px 16px; overflow-x: auto; border-top: 1px solid var(--bord);
   }
-  #images[hidden] { display: none; }
-  #images button {
+  #pieces[hidden] { display: none; }
+  #pieces button {
     flex: none; position: relative; padding: 0; width: 64px; height: 64px; overflow: hidden;
     border-radius: 8px; background: var(--appui);
   }
-  #images img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  #pieces img { width: 100%; height: 100%; object-fit: cover; display: block; }
   /* Croix de suppression directe sur chaque vignette */
-  #images .croix {
+  #pieces .croix {
     position: absolute; top: 2px; right: 2px; z-index: 1; width: 22px; height: 22px; border-radius: 50%;
     display: grid; place-items: center; font-size: 15px; line-height: 1;
     background: rgba(0, 0, 0, .65); color: #fff; cursor: pointer;
   }
-  #images .envoi img { opacity: .45; }
-  #images .envoi::after {
+  #pieces .envoi img { opacity: .45; }
+  #pieces .envoi::after {
     content: ''; position: absolute; inset: 22px; border: 3px solid var(--texte); border-right-color: transparent;
     border-radius: 50%; animation: tourne 1s linear infinite;
   }
-  #images .erreur { outline: 2px solid #d33; outline-offset: -2px; }
-  #images .erreur::after { content: '↻'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 24px; color: #d33; }
+  /* Fichier texte joint : carte avec nom et taille */
+  #pieces button.fichier {
+    width: auto; min-width: 96px; max-width: 190px; padding: 0 28px 0 10px; display: flex; flex-direction: column;
+    justify-content: center; align-items: flex-start; gap: 2px; text-align: left; font-size: 13px; line-height: 1.25;
+  }
+  #pieces .fichier .nom { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  #pieces .fichier .taille { opacity: .65; font-size: 12px; white-space: nowrap; }
+  #pieces .fichier.envoi { opacity: .6; }
+  #pieces .fichier.envoi::after { inset: auto 6px 6px auto; width: 12px; height: 12px; border-width: 2px; }
+  #pieces .erreur { outline: 2px solid #d33; outline-offset: -2px; }
+  #pieces .erreur::after { content: '↻'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 24px; color: #d33; }
   @keyframes tourne { to { transform: rotate(360deg); } }
 
   /* Barre : mise en forme (1re rangée) et actions (2e rangée) ; sur PC, tout sur une ligne */
@@ -186,12 +195,13 @@
   nav .fmt, nav .act { display: flex; gap: 5px; width: 100%; }
   nav button { flex: 1 1 0; min-width: 0; padding: 7px 6px; white-space: nowrap; }
   nav .fmt .petit { flex: 0 0 auto; min-width: 40px; }
+  @media (max-width: 400px) { nav .fmt .petit { min-width: 34px; } nav .fmt button { padding-left: 4px; padding-right: 4px; } }
   @media (max-width: 340px) { nav { font-size: 14px; } nav button { padding: 6px 3px; } nav .fmt .petit { min-width: 32px; } }
   /* Grand écran (PC) : colonne centrée façon feuille, boutons à leur taille naturelle,
      mise en forme à gauche et actions à droite */
   @media (min-width: 700px) {
     html, body { background: var(--exterieur); }
-    #onglets, #zone, #images, nav {
+    #onglets, #zone, #pieces, nav {
       width: 100%; max-width: 920px; margin-left: auto; margin-right: auto;
       background: var(--fond); border-left: 1px solid var(--bord); border-right: 1px solid var(--bord);
     }
@@ -269,16 +279,16 @@
   <span id="etat" title="Synchronisation"></span>
 </div>
 <div id="zone"></div>
-<div id="images" hidden></div>
+<div id="pieces" hidden></div>
 <nav>
   <div class="fmt">
     <button id="puces" class="format petit" title="Liste à puces (encore : sous-niveau)" aria-label="Liste à puces">•</button>
     <button id="numeros" class="format petit" title="Liste numérotée (encore : sous-niveau)" aria-label="Liste numérotée">1.</button>
     <button id="code" class="format petit" title="Bloc de code" aria-label="Bloc de code">&lt;/&gt;</button>
-    <button id="image" class="format petit" title="Insérer une image (galerie, appareil photo)" aria-label="Insérer une image">🖼</button>
+    <button id="joindre" class="format petit" title="Joindre une image (galerie, appareil photo), un fichier texte (code, JSON, HTML, CSV…) ou une archive (zip, 7z…)" aria-label="Joindre une image ou un fichier">📎</button>
     <button id="balise" class="format" title="Entourer d'une balise <nom>…</nom>" aria-label="Balise">Balise</button>
     <button id="modele" class="format" title="Insérer un modèle de prompt" aria-label="Modèle">Modèle</button>
-    <input id="fichier" type="file" accept="image/*" multiple hidden>
+    <input id="choix-fichiers" type="file" multiple hidden>
   </div>
   <div class="act">
     <button id="effacer">Effacer</button>
@@ -327,7 +337,7 @@
   const historique = CM.history; // (« history » est déjà l'historique du navigateur)
   const distant = Annotation.define(); // modification venue d'un autre appareil (pas un geste ici)
   const CLOTURE = /^\s*```/;          // ligne d'ouverture ou de fermeture d'un bloc de code
-  const BALISE_OUVRE = /^<([A-Za-z][\w-]*)>\s*$/, BALISE_FERME = /^<\/([A-Za-z][\w-]*)>\s*$/;
+  const BALISE_OUVRE = /^<([A-Za-z][\w-]*)(?:\s+[^<>]*)?>\s*$/, BALISE_FERME = /^<\/([A-Za-z][\w-]*)>\s*$/;
   const TITRE = /^#{1,6}\s+\S/;       // titre Markdown (« ## Contexte »)
   const surSaisie = [];                // appelés après chaque modification faite ici
   let texteVue = null;                 // texte en cache (recalculé après une modification)
@@ -680,7 +690,9 @@
   // Entrées d'index valides seulement (elles viennent du serveur)
   function validerIndex(liste) {
     return Array.isArray(liste) ? liste.filter(x => x && typeof x.id === 'string' && /^[\w-]{1,40}$/.test(x.id)
-      && Number.isInteger(x.n) && x.n >= 1 && x.n <= 200 && typeof x.mini === 'string' && x.mini.startsWith('data:image/')) : [];
+      && Number.isInteger(x.n) && x.n >= 1 && x.n <= 1000
+      && (typeof x.f === 'string' ? x.f.length >= 1 && x.f.length <= 200 && Number.isInteger(x.o) // fichier texte
+        : typeof x.mini === 'string' && x.mini.startsWith('data:image/'))) : [];
   }
 
   // ---- Notes ----
@@ -695,7 +707,7 @@
       url: `${base}/notes/${cle}/${ESPACE}${nom}.json`,
       urlNom: `${base}/notes/${cle}/${ESPACE}n${nom}.json`,
       urlIndex: `${base}/notes/${cle}/${ESPACE}i${nom}.json`,
-      images: lireIndexLocal(cache),   // images de l'onglet (index synchronisé)
+      distantes: lireIndexLocal(cache), // pièces jointes de l'onglet (index synchronisé)
       etagIndex: null,
       locales: [],                     // images ajoutées ici, en cours d'envoi
       masquees: new Set(),             // images supprimées il y a moins de 5 s (encore annulable)
@@ -929,7 +941,7 @@
     ecouter(actif);
     lireNoms();
     onglets.forEach(o => { if (aEnvoyer(o)) envoyer(o); });
-    reessayerImages();
+    reessayerEnvois();
     envoyerOrdre();
   }
   document.addEventListener('visibilitychange', () => {
@@ -1167,12 +1179,12 @@
     clearTimeout(o.minuteur);
     o.etag = null;
     oublierPeutEtre(o);
-    const ids = [...o.images, ...o.locales].map(x => x.id);
+    const ids = [...o.distantes, ...o.locales].map(x => x.id);
     definir(o, { texte: '', depart: '' });
     definirNom(o, '', false);
     const effacer = url => fetch(url, { method: 'PUT', body: 'null' }).catch(() => {});
     // Les lectures de cet onglet attendent la fin de l'effacement (pas d'ancien contenu relu entre-temps)
-    const vidage = o.vidage = Promise.all([effacer(o.url), effacer(o.urlNom), ids.length ? supprimerImages(o, ids).catch(() => {}) : effacer(o.urlIndex)]);
+    const vidage = o.vidage = Promise.all([effacer(o.url), effacer(o.urlNom), ids.length ? supprimerPieces(o, ids).catch(() => {}) : effacer(o.urlIndex)]);
     await vidage;
     if (o.vidage === vidage) o.vidage = null;
   }
@@ -1251,7 +1263,7 @@
     if (typeof finirSuite === 'function' && suite) finirSuite();
     actif = o;
     chargerTexte(o.texte);
-    afficherImages();
+    afficherPieces();
     stock.ecrire(ESPACE + 'onglet-n', o.numero);
     afficherOnglets();
     ecouter(o);
@@ -1632,19 +1644,21 @@
     remplacer(note.selectionStart, note.selectionEnd, texte, 'input.paste');
   }
 
-  // ---- Images ----
-  // Compressées dans le navigateur (1568 px au plus : Claude réduit de toute façon au-delà),
-  // en WebP (JPEG si le navigateur ne sait pas l'écrire), découpées en morceaux de texte dans
-  // Firebase (même domaine et même format JSON que les notes : passe les proxys d'entreprise).
-  // L'index de l'onglet (petites vignettes comprises) est synchronisé comme le reste ;
-  // les images complètes sont téléchargées une fois puis gardées sur l'appareil.
-  const MAX_COTE = 1568, MAX_IMAGES = 10, TAILLE_MORCEAU = 150000, COTE_VIGNETTE = 200;
-  const urlMorceau = (id, k) => `${base}/images/${cle}/${id}/${k}.json`;
-  const urlImage = id => `${base}/images/${cle}/${id}.json`;
-  const imagesCompletes = new Map(); // id → data URL de l'image complète
-  const zoneImages = document.getElementById('images');
+  // ==== Pièces jointes : images, fichiers texte, archives ====
+  // Toutes rangées de la même façon : contenu découpé en morceaux de texte dans Firebase
+  // (images/<clé>/<id>/<k> : même domaine et même format JSON que les notes, ce qui passe les
+  // proxys d'entreprise). Un index par onglet (i<n>), synchronisé comme les notes, décrit chaque
+  // pièce : image (vignette, dimensions), fichier texte (f : nom, o : taille) ou archive (b : 1).
+  // Les contenus sont téléchargés une fois puis gardés sur l'appareil (IndexedDB) ;
+  // les archives, lourdes, seulement quand on les ouvre.
 
-  // Stockage des images complètes sur l'appareil (IndexedDB ; sans lui, tout reste en mémoire)
+  // ---- Stockage et synchronisation ----
+  const TAILLE_MORCEAU = 150000;
+  const urlMorceau = (id, k) => `${base}/images/${cle}/${id}/${k}.json`;
+  const urlPiece = id => `${base}/images/${cle}/${id}.json`;
+  const contenus = new Map(); // id → contenu complet : data URL (image, archive) ou texte (fichier texte)
+
+  // Contenus gardés sur l'appareil (IndexedDB ; sans lui, tout reste en mémoire)
   const idb = (() => {
     let base;
     const ouvrir = () => base ||= new Promise((ok, ko) => {
@@ -1671,6 +1685,217 @@
   const nouvelId = () => 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const enDataURL = blob => new Promise((ok, ko) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = ko; r.readAsDataURL(blob); });
   const versBlob = donnees => fetch(donnees).then(r => r.blob());
+
+  // Pièces de l'onglet (envoyées, puis en cours d'envoi), dans l'ordre d'ajout (pas dans l'ordre de fin d'envoi)
+  let horloge = 0;
+  const instant = () => horloge = Math.max(Date.now(), horloge + 1);
+  const pieces = o => [...o.distantes, ...o.locales].sort((a, b) => (a.t || 0) - (b.t || 0));
+
+  function enregistrerIndex(o, liste, etag) {
+    o.distantes = validerIndex(liste);
+    if (etag !== undefined) o.etagIndex = etag;
+    stock.ecrire(o.cache + ':images', JSON.stringify(o.distantes));
+    if (o === actif) afficherPieces();
+    telechargerPieces(o);
+  }
+
+  // Lecture de l'index (304 si inchangé)
+  async function lireIndex(o) {
+    if (o.vidage) await o.vidage;
+    const entetes = o.etagIndex ? { ...entetesLecture, 'if-none-match': o.etagIndex } : entetesLecture;
+    const r = await fetch(`${o.urlIndex}?t=${Date.now()}`, { cache: 'no-store', headers: entetes });
+    if (r.status === 304) return;
+    if (!r.ok) throw new Error(r.status);
+    const brut = await r.json();
+    let liste = [];
+    try { liste = typeof brut === 'string' ? JSON.parse(brut) : []; } catch {}
+    enregistrerIndex(o, liste, r.headers.get('ETag'));
+  }
+
+  // Modifie l'index : lecture, modification, envoi conditionnel ; recommence si un autre appareil a écrit entre-temps
+  async function modifierIndex(o, modifier) {
+    for (let essai = 0; essai < 8; essai++) {
+      const r = await fetch(`${o.urlIndex}?t=${Date.now()}`, { cache: 'no-store', headers: entetesLecture });
+      if (!r.ok) throw new Error(r.status);
+      const brut = await r.json(), etag = r.headers.get('ETag');
+      let liste = [];
+      try { liste = typeof brut === 'string' ? validerIndex(JSON.parse(brut)) : []; } catch {}
+      const nouvelle = modifier(liste);
+      const corps = nouvelle.length ? JSON.stringify(JSON.stringify(nouvelle)) : 'null';
+      const e = await fetch(o.urlIndex, { method: 'PUT', headers: etag ? { ...entetesLecture, 'if-match': etag } : entetesLecture, body: corps });
+      if (e.status === 412) continue;
+      if (!e.ok) throw new Error(e.status);
+      enregistrerIndex(o, nouvelle, e.headers.get('ETag'));
+      return;
+    }
+    throw new Error('index occupé');
+  }
+
+  // Morceaux de texte ; jamais coupés au milieu d'un caractère (emoji : deux unités UTF-16)
+  function decouper(texte, taille) {
+    const morceaux = [];
+    for (let k = 0; k < texte.length;) {
+      let fin = Math.min(texte.length, k + taille);
+      if (fin < texte.length && /[\uD800-\uDBFF]/.test(texte[fin - 1])) fin--;
+      morceaux.push(texte.slice(k, fin));
+      k = fin;
+    }
+    return morceaux.length ? morceaux : [''];
+  }
+
+  async function envoyerMorceau(url, morceau) {
+    for (let essai = 0; ; essai++) {
+      try {
+        const r = await fetch(url, { method: 'PUT', body: JSON.stringify(morceau) });
+        if (r.ok) return;
+        throw new Error(r.status);
+      } catch (e) {
+        if (essai >= 2) throw e;
+        await new Promise(ok => setTimeout(ok, 1000 * (essai + 1)));
+      }
+    }
+  }
+
+  async function televerser(o, local) {
+    if (local.enCours) return;
+    local.enCours = true;
+    local.statut = 'envoi';
+    if (o === actif) afficherPieces();
+    try {
+      // après un échec, morceaux deux fois plus petits (proxy qui limiterait la taille des requêtes)
+      const taille = local.taille ||= TAILLE_MORCEAU;
+      const morceaux = decouper(local.donnees, taille);
+      for (let k = 0; k < morceaux.length; k++) {
+        await envoyerMorceau(urlMorceau(local.id, k), morceaux[k]);
+        if (morceaux.length > 3) { local.progres = Math.round((k + 1) * 100 / morceaux.length); if (o === actif) afficherPieces(); }
+      }
+      // la pièce n'apparaît ailleurs qu'une fois tous ses morceaux arrivés
+      const entree = local.f ? { id: local.id, n: morceaux.length, f: local.f, o: local.o, t: local.t, ...(local.b ? { b: 1 } : {}) }
+        : { id: local.id, n: morceaux.length, w: local.w, h: local.h, mini: local.mini, t: local.t };
+      if (local.supprimee) return; // supprimée pendant l'envoi
+      await modifierIndex(o, liste => liste.some(x => x.id === local.id) ? liste : [...liste, entree]);
+      o.locales = o.locales.filter(x => x !== local);
+    } catch {
+      local.statut = 'erreur';
+      local.taille = Math.max(20000, Math.ceil(Math.min(local.taille, local.donnees.length) / 2));
+    } finally {
+      local.enCours = false;
+    }
+    if (o === actif) afficherPieces();
+    majEtat();
+  }
+
+  // Nouvelle pièce prête (contenu connu) : gardée sur l'appareil, puis envoyée
+  function ajouterPiece(o, champs) {
+    const local = { id: nouvelId(), statut: 'prep', t: instant(), ...champs };
+    o.locales.push(local);
+    contenus.set(local.id, local.donnees);
+    idb.ecrire(local.id, local.donnees);
+    televerser(o, local);
+  }
+
+  function reessayerEnvois() {
+    onglets.forEach(o => o.locales.forEach(x => { if (x.statut === 'erreur') televerser(o, x); }));
+  }
+  setInterval(() => { if (!document.hidden) reessayerEnvois(); }, 20000);
+
+  // Téléchargement des contenus absents de l'appareil
+  const enTelechargement = new Set();
+  // Les archives (lourdes) ne sont téléchargées qu'à la demande (idDemande)
+  async function telechargerPieces(o, idDemande) {
+    for (const im of o.distantes) {
+      if (contenus.has(im.id) || enTelechargement.has(im.id) || (im.b && im.id !== idDemande)) continue;
+      enTelechargement.add(im.id);
+      try {
+        let donnees = await idb.lire(im.id);
+        if (!donnees) {
+          const morceaux = await Promise.all(Array.from({ length: im.n }, (_, k) =>
+            fetch(`${urlMorceau(im.id, k)}?t=${Date.now()}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : Promise.reject(r.status))));
+          if (morceaux.some(m => typeof m !== 'string')) throw new Error('incomplet');
+          donnees = morceaux.join('');
+          if ((!im.f || im.b) && !donnees.startsWith('data:')) throw new Error('invalide');
+          idb.ecrire(im.id, donnees);
+        }
+        contenus.set(im.id, donnees);
+      } catch {} finally {
+        enTelechargement.delete(im.id);
+      }
+    }
+  }
+
+  async function supprimerPieces(o, ids) {
+    const locales = o.locales.filter(x => ids.includes(x.id));
+    locales.forEach(x => { x.supprimee = true; });
+    o.locales = o.locales.filter(x => !ids.includes(x.id));
+    if (o.distantes.some(x => ids.includes(x.id))) await modifierIndex(o, liste => liste.filter(x => !ids.includes(x.id)));
+    ids.forEach(id => {
+      fetch(urlPiece(id), { method: 'PUT', body: 'null' }).catch(() => {});
+      contenus.delete(id);
+      idb.effacer(id);
+    });
+    if (o === actif) afficherPieces();
+  }
+
+  // Suppression sans confirmation : les pièces disparaissent aussitôt, mais ne sont supprimées
+  // pour de bon qu'au bout de 5 s ; « Annuler » les fait revenir.
+  const DELAI_ANNULER = 5000;
+  function supprimerPiecesDiffere(o, ids, message, annulerAussi) {
+    if (!ids.length) { if (message) annoncer(message, annulerAussi && { texte: 'Annuler', duree: DELAI_ANNULER, faire: annulerAussi }); return; }
+    ids.forEach(id => o.masquees.add(id));
+    if (o === actif) afficherPieces();
+    const minuteur = setTimeout(async () => {
+      try { await supprimerPieces(o, ids); } catch { annoncer('Images : suppression impossible (réseau)'); }
+      ids.forEach(id => o.masquees.delete(id));
+      if (o === actif) afficherPieces();
+    }, DELAI_ANNULER);
+    annoncer(message, {
+      texte: 'Annuler', duree: DELAI_ANNULER,
+      faire: () => {
+        clearTimeout(minuteur);
+        ids.forEach(id => o.masquees.delete(id));
+        if (o === actif) afficherPieces();
+        if (annulerAussi) annulerAussi();
+      },
+    });
+  }
+
+  // ---- Cartes sous la note (vignettes d'images, fichiers, archives) ----
+  const zonePieces = document.getElementById('pieces');
+  const enKo = n => n < 1024 ? `${n} o` : n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} Ko` : `${(n / 1048576).toFixed(1).replace('.', ',')} Mo`;
+
+  function afficherPieces() {
+    const o = actif, liste = pieces(o).map(x => x.statut ? x : { ...x, statut: 'ok' }).filter(x => !o.masquees.has(x.id));
+    zonePieces.hidden = !liste.length;
+    zonePieces.replaceChildren(...liste.map(x => {
+      const b = document.createElement('button'), quoi = x.f ? 'le fichier' : 'l\'image';
+      b.className = (x.f ? 'fichier ' : '') + (x.statut === 'ok' ? '' : x.statut === 'erreur' ? 'erreur' : 'envoi');
+      b.title = x.statut === 'erreur' ? 'Envoi impossible : toucher pour réessayer' : x.f ? `${x.f} : télécharger, copier, insérer…` : 'Voir l\'image';
+      if (x.f) {
+        const nom = document.createElement('span'), taille = document.createElement('span');
+        nom.className = 'nom'; nom.textContent = (x.b ? '🗜 ' : '📄 ') + x.f;
+        taille.className = 'taille';
+        taille.textContent = x.statut === 'envoi' && x.progres !== undefined ? `envoi ${x.progres} %` : enKo(x.o);
+        b.append(nom, taille);
+      }
+      if (x.mini) { const img = document.createElement('img'); img.src = x.mini; img.alt = ''; b.append(img); }
+      const croix = document.createElement('span');
+      croix.className = 'croix';
+      croix.textContent = '×';
+      croix.title = 'Supprimer ' + quoi;
+      croix.setAttribute('role', 'button');
+      croix.setAttribute('aria-label', 'Supprimer ' + quoi);
+      croix.onclick = e => { e.stopPropagation(); supprimerPiecesDiffere(o, [x.id], x.b ? 'Archive supprimée' : x.f ? 'Fichier supprimé' : 'Image supprimée'); };
+      b.append(croix);
+      b.addEventListener('mousedown', e => e.preventDefault());
+      b.onclick = () => x.statut === 'erreur' ? televerser(o, x) : x.f ? ouvrirFichier(o, x.id) : ouvrirImage(o, x.id);
+      return b;
+    }));
+  }
+
+  // ---- Images ----
+  // Compressées dans le navigateur (1568 px au plus : Claude réduit de toute façon au-delà),
+  // en WebP (JPEG si le navigateur ne sait pas l'écrire), avec une petite vignette dans l'index.
+  const MAX_COTE = 1568, MAX_IMAGES = 10, COTE_VIGNETTE = 200;
   const toBlob = (c, type, q) => new Promise(ok => c.toBlob(ok, type, q));
 
   async function chargerImage(blob) {
@@ -1710,206 +1935,40 @@
     return toBlob(c, 'image/png');
   }
 
-  function afficherImages() {
-    const o = actif, liste = [...o.images.map(x => ({ ...x, statut: 'ok' })), ...o.locales].filter(x => !o.masquees.has(x.id));
-    zoneImages.hidden = !liste.length;
-    zoneImages.replaceChildren(...liste.map(x => {
-      const b = document.createElement('button');
-      b.className = x.statut === 'ok' ? '' : x.statut === 'erreur' ? 'erreur' : 'envoi';
-      b.title = x.statut === 'erreur' ? 'Envoi impossible : toucher pour réessayer' : 'Voir l\'image';
-      if (x.mini) { const img = document.createElement('img'); img.src = x.mini; img.alt = ''; b.append(img); }
-      const croix = document.createElement('span');
-      croix.className = 'croix';
-      croix.textContent = '×';
-      croix.title = 'Supprimer l\'image';
-      croix.setAttribute('role', 'button');
-      croix.setAttribute('aria-label', 'Supprimer l\'image');
-      croix.onclick = e => { e.stopPropagation(); supprimerImagesDiffere(o, [x.id], 'Image supprimée'); };
-      b.append(croix);
-      b.addEventListener('mousedown', e => e.preventDefault());
-      b.onclick = () => x.statut === 'erreur' ? televerser(o, x) : ouvrirImage(o, x.id);
-      return b;
-    }));
-  }
-
-  function enregistrerIndex(o, liste, etag) {
-    o.images = validerIndex(liste);
-    if (etag !== undefined) o.etagIndex = etag;
-    stock.ecrire(o.cache + ':images', JSON.stringify(o.images));
-    if (o === actif) afficherImages();
-    telechargerImages(o);
-  }
-
-  // Lecture de l'index (304 si inchangé)
-  async function lireIndex(o) {
-    if (o.vidage) await o.vidage;
-    const entetes = o.etagIndex ? { ...entetesLecture, 'if-none-match': o.etagIndex } : entetesLecture;
-    const r = await fetch(`${o.urlIndex}?t=${Date.now()}`, { cache: 'no-store', headers: entetes });
-    if (r.status === 304) return;
-    if (!r.ok) throw new Error(r.status);
-    const brut = await r.json();
-    let liste = [];
-    try { liste = typeof brut === 'string' ? JSON.parse(brut) : []; } catch {}
-    enregistrerIndex(o, liste, r.headers.get('ETag'));
-  }
-
-  // Modifie l'index : lecture, modification, envoi conditionnel ; recommence si un autre appareil a écrit entre-temps
-  async function modifierIndex(o, modifier) {
-    for (let essai = 0; essai < 8; essai++) {
-      const r = await fetch(`${o.urlIndex}?t=${Date.now()}`, { cache: 'no-store', headers: entetesLecture });
-      if (!r.ok) throw new Error(r.status);
-      const brut = await r.json(), etag = r.headers.get('ETag');
-      let liste = [];
-      try { liste = typeof brut === 'string' ? validerIndex(JSON.parse(brut)) : []; } catch {}
-      const nouvelle = modifier(liste);
-      const corps = nouvelle.length ? JSON.stringify(JSON.stringify(nouvelle)) : 'null';
-      const e = await fetch(o.urlIndex, { method: 'PUT', headers: etag ? { ...entetesLecture, 'if-match': etag } : entetesLecture, body: corps });
-      if (e.status === 412) continue;
-      if (!e.ok) throw new Error(e.status);
-      enregistrerIndex(o, nouvelle, e.headers.get('ETag'));
-      return;
-    }
-    throw new Error('index occupé');
-  }
-
-  async function envoyerMorceau(url, morceau) {
-    for (let essai = 0; ; essai++) {
-      try {
-        const r = await fetch(url, { method: 'PUT', body: JSON.stringify(morceau) });
-        if (r.ok) return;
-        throw new Error(r.status);
-      } catch (e) {
-        if (essai >= 2) throw e;
-        await new Promise(ok => setTimeout(ok, 1000 * (essai + 1)));
-      }
-    }
-  }
-
-  async function televerser(o, local) {
-    if (local.enCours) return;
-    local.enCours = true;
-    local.statut = 'envoi';
-    if (o === actif) afficherImages();
-    try {
-      // après un échec, morceaux deux fois plus petits (proxy qui limiterait la taille des requêtes)
-      const taille = local.taille ||= TAILLE_MORCEAU;
-      const morceaux = [];
-      for (let k = 0; k < local.donnees.length; k += taille) morceaux.push(local.donnees.slice(k, k + taille));
-      for (let k = 0; k < morceaux.length; k++) await envoyerMorceau(urlMorceau(local.id, k), morceaux[k]);
-      // l'image n'apparaît ailleurs qu'une fois tous ses morceaux arrivés
-      const entree = { id: local.id, n: morceaux.length, w: local.w, h: local.h, mini: local.mini, t: Date.now() };
-      if (local.supprimee) return; // supprimée pendant l'envoi
-      await modifierIndex(o, liste => liste.some(x => x.id === local.id) ? liste : [...liste, entree]);
-      o.locales = o.locales.filter(x => x !== local);
-    } catch {
-      local.statut = 'erreur';
-      local.taille = Math.max(20000, Math.ceil(Math.min(local.taille, local.donnees.length) / 2));
-    } finally {
-      local.enCours = false;
-    }
-    if (o === actif) afficherImages();
-    majEtat();
-  }
-
-  function reessayerImages() {
-    onglets.forEach(o => o.locales.forEach(x => { if (x.statut === 'erreur') televerser(o, x); }));
-  }
-  setInterval(() => { if (!document.hidden) reessayerImages(); }, 20000);
-
   async function ajouterImages(blobs) {
     const o = actif;
     for (const blob of blobs) {
-      if (o.images.length + o.locales.length >= MAX_IMAGES) { annoncer(`${MAX_IMAGES} images au plus par onglet`); break; }
-      const local = { id: nouvelId(), statut: 'prep' };
+      if ([...o.distantes, ...o.locales].filter(x => !x.f).length >= MAX_IMAGES) { annoncer(`${MAX_IMAGES} images au plus par onglet`); break; }
+      const local = { id: nouvelId(), statut: 'prep', t: instant() };
       o.locales.push(local);
-      if (o === actif) afficherImages();
+      if (o === actif) afficherPieces();
       try {
         Object.assign(local, await preparerImage(blob));
       } catch {
         o.locales = o.locales.filter(x => x !== local);
-        if (o === actif) afficherImages();
+        if (o === actif) afficherPieces();
         annoncer('Image illisible');
         continue;
       }
-      imagesCompletes.set(local.id, local.donnees);
+      contenus.set(local.id, local.donnees);
       idb.ecrire(local.id, local.donnees);
       televerser(o, local);
     }
   }
 
-  // Téléchargement des images complètes absentes de l'appareil
-  const enTelechargement = new Set();
-  async function telechargerImages(o) {
-    for (const im of o.images) {
-      if (imagesCompletes.has(im.id) || enTelechargement.has(im.id)) continue;
-      enTelechargement.add(im.id);
-      try {
-        let donnees = await idb.lire(im.id);
-        if (!donnees) {
-          const morceaux = await Promise.all(Array.from({ length: im.n }, (_, k) =>
-            fetch(`${urlMorceau(im.id, k)}?t=${Date.now()}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : Promise.reject(r.status))));
-          if (morceaux.some(m => typeof m !== 'string')) throw new Error('incomplet');
-          donnees = morceaux.join('');
-          if (!donnees.startsWith('data:image/')) throw new Error('invalide');
-          idb.ecrire(im.id, donnees);
-        }
-        imagesCompletes.set(im.id, donnees);
-      } catch {} finally {
-        enTelechargement.delete(im.id);
-      }
-    }
-  }
-
   // Images de l'onglet prêtes à être copiées (dans l'ordre d'affichage)
-  const imagesPretes = o => [...o.images, ...o.locales].filter(x => !o.masquees.has(x.id)).map(x => imagesCompletes.get(x.id)).filter(Boolean);
-
-  async function supprimerImages(o, ids) {
-    const locales = o.locales.filter(x => ids.includes(x.id));
-    locales.forEach(x => { x.supprimee = true; });
-    o.locales = o.locales.filter(x => !ids.includes(x.id));
-    if (o.images.some(x => ids.includes(x.id))) await modifierIndex(o, liste => liste.filter(x => !ids.includes(x.id)));
-    ids.forEach(id => {
-      fetch(urlImage(id), { method: 'PUT', body: 'null' }).catch(() => {});
-      imagesCompletes.delete(id);
-      idb.effacer(id);
-    });
-    if (o === actif) afficherImages();
-  }
-  const supprimerImage = (o, id) => supprimerImages(o, [id]);
-
-  // Suppression sans confirmation : les images disparaissent aussitôt, mais ne sont supprimées
-  // pour de bon qu'au bout de 5 s ; « Annuler » les fait revenir.
-  const DELAI_ANNULER = 5000;
-  function supprimerImagesDiffere(o, ids, message, annulerAussi) {
-    if (!ids.length) { if (message) annoncer(message, annulerAussi && { texte: 'Annuler', duree: DELAI_ANNULER, faire: annulerAussi }); return; }
-    ids.forEach(id => o.masquees.add(id));
-    if (o === actif) afficherImages();
-    const minuteur = setTimeout(async () => {
-      try { await supprimerImages(o, ids); } catch { annoncer('Images : suppression impossible (réseau)'); }
-      ids.forEach(id => o.masquees.delete(id));
-      if (o === actif) afficherImages();
-    }, DELAI_ANNULER);
-    annoncer(message, {
-      texte: 'Annuler', duree: DELAI_ANNULER,
-      faire: () => {
-        clearTimeout(minuteur);
-        ids.forEach(id => o.masquees.delete(id));
-        if (o === actif) afficherImages();
-        if (annulerAussi) annulerAussi();
-      },
-    });
-  }
+  const imagesPretes = o => pieces(o).filter(x => !x.f && !o.masquees.has(x.id)).map(x => contenus.get(x.id)).filter(Boolean);
 
   // Visionneuse
   const visionneuse = document.getElementById('visionneuse'), grande = document.getElementById('grande');
   let imageVue = null;
   function ouvrirImage(o, id) {
-    const x = [...o.images, ...o.locales].find(y => y.id === id);
+    const x = [...o.distantes, ...o.locales].find(y => y.id === id);
     if (!x) return;
     imageVue = { o, id };
-    grande.src = imagesCompletes.get(id) || x.mini;
+    grande.src = contenus.get(id) || x.mini;
     visionneuse.hidden = false;
-    if (!imagesCompletes.has(id)) telechargerImages(o).then(() => { if (imageVue?.id === id && imagesCompletes.has(id)) grande.src = imagesCompletes.get(id); });
+    if (!contenus.has(id)) telechargerPieces(o).then(() => { if (imageVue?.id === id && contenus.has(id)) grande.src = contenus.get(id); });
   }
   const fermerImage = () => { visionneuse.hidden = true; imageVue = null; grande.removeAttribute('src'); };
   document.getElementById('v-fermer').onclick = fermerImage;
@@ -1918,10 +1977,10 @@
   document.getElementById('v-supprimer').onclick = async () => {
     const { o, id } = imageVue;
     fermerImage();
-    supprimerImagesDiffere(o, [id], 'Image supprimée');
+    supprimerPiecesDiffere(o, [id], 'Image supprimée');
   };
   document.getElementById('v-copier').onclick = async () => {
-    const donnees = imagesCompletes.get(imageVue.id);
+    const donnees = contenus.get(imageVue.id);
     if (!donnees) { annoncer('Image en cours de téléchargement…'); return; }
     try {
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': enPng(donnees) })]);
@@ -1929,17 +1988,164 @@
     } catch { annoncer('Copie d\'image refusée par le navigateur'); }
   };
 
-  // Images glissées ou collées dans la zone de texte
+  // ---- Fichiers texte (code, JSON, HTML, CSV…) ----
+  // Leur contenu est inclus dans Copier, à la suite de la note. PDF et autres binaires sont refusés.
+  const MAX_FICHIERS = 10, MAX_OCTETS_FICHIER = 1024 * 1024; // MAX_FICHIERS : archives comprises
+  const BINAIRE = /\.(pdf|zip|rar|7z|gz|tgz|bz2|xz|tar|jar|apk|exe|dll|so|dylib|bin|iso|dmg|docx?|xlsx?|pptx?|odt|ods|odp|epub|mp3|mp4|m4a|wav|ogg|mov|avi|mkv|webm|woff2?|ttf|otf|eot|ico|class|pyc|o|a|wasm|sqlite|db)$/i;
+
+  // Contenu texte d'un fichier, ou null s'il est binaire (octet nul) ; UTF-8, sinon Windows-1252
+  async function lireTexte(fichier) {
+    const octets = new Uint8Array(await fichier.arrayBuffer());
+    if (octets.subarray(0, 65536).includes(0)) return null;
+    try { return new TextDecoder('utf-8', { fatal: true }).decode(octets); } catch {}
+    return new TextDecoder('windows-1252').decode(octets);
+  }
+
+  // Fichier texte ajouté à l'onglet ; false s'il n'est pas du texte (binaire)
+  async function ajouterTexte(o, fichier, nom) {
+    if (fichier.size > MAX_OCTETS_FICHIER) { annoncer(`« ${nom} » : 1 Mo au plus par fichier texte`); return true; }
+    const texte = BINAIRE.test(nom) ? null : await lireTexte(fichier).catch(() => null);
+    if (texte === null) return false;
+    ajouterPiece(o, { f: nom, o: fichier.size, donnees: texte });
+    return true;
+  }
+
+  // Fichiers de l'onglet pour Copier : <document nom="…">contenu</document>, à la suite de la note
+  const fichiersDeOnglet = o => pieces(o).filter(x => x.f && !x.b && !o.masquees.has(x.id));
+  const blocFichier = (nom, contenu) => `<document nom="${nom.replace(/"/g, "'")}">\n${contenu.replace(/\r\n?/g, '\n').replace(/\s+$/, '')}\n</document>`;
+  function texteAvecFichiers(o, texte) {
+    const fichiers = fichiersDeOnglet(o), prets = fichiers.filter(x => contenus.has(x.id));
+    const blocs = prets.map(x => blocFichier(x.f, contenus.get(x.id)));
+    return { texte: [texte, ...blocs].filter(Boolean).join('\n\n'), fichiers: prets.length, manquants: fichiers.length - prets.length, archives: archivesDeOnglet(o).length };
+  }
+
+  const fichierDe = (x, contenu) => new File([contenu], x.f, { type: /\.(json)$/i.test(x.f) ? 'application/json' : 'text/plain' });
+  const telechargerFichier = (x, contenu) => enregistrerFichier(fichierDe(x, contenu));
+  function enregistrerFichier(fichier) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(fichier);
+    a.download = fichier.name;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  }
+
+  async function ouvrirFichier(o, id) {
+    const x = [...o.distantes, ...o.locales].find(y => y.id === id);
+    if (!x) return;
+    if (x.b) return ouvrirArchive(o, x);
+    if (!contenus.has(id)) await telechargerPieces(o);
+    const contenu = contenus.get(id);
+    if (contenu === undefined) { annoncer('Fichier pas encore téléchargé (réseau)'); return; }
+    const lignes = contenu.replace(/\r?\n$/, '').split('\n').length;
+    let partageable = false;
+    try { partageable = tactile && !!navigator.canShare?.({ files: [fichierDe(x, contenu)] }); } catch {}
+    const r = await popup({
+      message: `📄 ${x.f} · ${enKo(x.o)} · ${lignes} ligne${lignes > 1 ? 's' : ''}. Son contenu est inclus dans Copier, à la suite de la note.`,
+      boutons: [
+        { texte: 'Supprimer', classe: 'danger', valeur: 'supprimer' },
+        { texte: 'Insérer dans la note', valeur: 'inserer' },
+        { texte: 'Copier le contenu', valeur: 'copier' },
+        ...(partageable ? [{ texte: 'Partager', valeur: 'partager' }] : []),
+        { texte: 'Fermer', classe: 'annuler', valeur: null },
+        { texte: 'Télécharger', classe: 'principal', valeur: 'telecharger' },
+      ],
+    });
+    if (r.valeur === 'telecharger') telechargerFichier(x, contenu);
+    else if (r.valeur === 'partager') navigator.share({ files: [fichierDe(x, contenu)] }).catch(() => {});
+    else if (r.valeur === 'copier') { await copier(blocFichier(x.f, contenu)); annoncer('Contenu copié ✓'); }
+    else if (r.valeur === 'supprimer') supprimerPiecesDiffere(o, [id], 'Fichier supprimé');
+    else if (r.valeur === 'inserer' && o === actif) {
+      // inséré sur une nouvelle ligne, puis le fichier est retiré (son contenu est dans la note)
+      const fin = note.value.length, avant = fin && !note.value.endsWith('\n') ? '\n\n' : fin ? '\n' : '';
+      remplacer(fin, fin, avant + blocFichier(x.f, contenu) + '\n');
+      supprimerPiecesDiffere(o, [id], 'Fichier inséré dans la note');
+    }
+  }
+
+  // ---- Archives (zip, 7z, rar, tar, gz…) ----
+  // Rangées telles quelles (base64), à télécharger ou partager ; non incluses dans Copier.
+  const MAX_OCTETS_ARCHIVE = 10 * 1024 * 1024;
+  const ARCHIVE = /\.(zip|7z|rar|tar|gz|tgz|bz2|tbz2?|xz|txz|zst|tzst)$/i;
+  const TYPES_ARCHIVE = { zip: 'application/zip', '7z': 'application/x-7z-compressed', rar: 'application/vnd.rar', tar: 'application/x-tar',
+    gz: 'application/gzip', tgz: 'application/gzip', bz2: 'application/x-bzip2', xz: 'application/x-xz', zst: 'application/zstd' };
+  const typeArchive = nom => TYPES_ARCHIVE[nom.split('.').pop().toLowerCase()] || 'application/octet-stream';
+  const archivesDeOnglet = o => pieces(o).filter(x => x.b && !o.masquees.has(x.id));
+
+  // Archive ajoutée à l'onglet ; false si elle est illisible
+  async function ajouterArchive(o, fichier, nom) {
+    if (fichier.size > MAX_OCTETS_ARCHIVE) { annoncer(`« ${nom} » : 10 Mo au plus par archive`); return true; }
+    let donnees;
+    try { donnees = await enDataURL(new Blob([fichier], { type: typeArchive(nom) })); } catch { return false; }
+    ajouterPiece(o, { f: nom, o: fichier.size, b: 1, donnees });
+    return true;
+  }
+
+  // Archive : fichier reconstruit à partir des données (base64), prêt avant le toucher sur Partager
+  async function ouvrirArchive(o, x) {
+    if (!contenus.has(x.id)) {
+      annoncer(`Téléchargement de « ${x.f} » (${enKo(x.o)})…`);
+      await telechargerPieces(o, x.id);
+    }
+    const donnees = contenus.get(x.id);
+    if (donnees === undefined) { annoncer('Archive pas encore téléchargée (réseau) : réessayer'); return; }
+    const fichier = new File([await versBlob(donnees)], x.f, { type: typeArchive(x.f) });
+    let partageable = false;
+    try { partageable = tactile && !!navigator.canShare?.({ files: [fichier] }); } catch {}
+    const r = await popup({
+      message: `🗜 ${x.f} · ${enKo(x.o)}. Archive : à télécharger ou partager (son contenu n'est pas inclus dans Copier).`,
+      boutons: [
+        { texte: 'Supprimer', classe: 'danger', valeur: 'supprimer' },
+        ...(partageable ? [{ texte: 'Partager', valeur: 'partager' }] : []),
+        { texte: 'Fermer', classe: 'annuler', valeur: null },
+        { texte: 'Télécharger', classe: 'principal', valeur: 'telecharger' },
+      ],
+    });
+    if (r.valeur === 'telecharger') enregistrerFichier(fichier);
+    else if (r.valeur === 'partager') navigator.share({ files: [fichier] }).catch(() => {});
+    else if (r.valeur === 'supprimer') supprimerPiecesDiffere(o, [x.id], 'Archive supprimée');
+  }
+
+  // ---- Ajouter : bouton 📎, collage, glisser-déposer ----
+  // Image à réduire et afficher en vignette (le SVG, lui, est du texte)
+  const estImage = f => f.type.startsWith('image/') && f.type !== 'image/svg+xml';
+
+  // Images, fichiers texte et archives, chacun rangé selon son type
+  async function ajouterPieces(fichiers) {
+    const o = actif, refuses = [], images = fichiers.filter(estImage);
+    if (images.length) ajouterImages(images);
+    for (const fichier of fichiers.filter(f => !estImage(f))) {
+      const nom = (fichier.name || 'fichier.txt').slice(-200);
+      if (pieces(o).filter(x => x.f).length >= MAX_FICHIERS) { annoncer(`${MAX_FICHIERS} fichiers au plus par onglet`); break; }
+      if (!await (ARCHIVE.test(nom) ? ajouterArchive : ajouterTexte)(o, fichier, nom)) refuses.push(nom);
+    }
+    if (o === actif) afficherPieces();
+    if (refuses.length) annoncer(`${refuses.length > 1 ? 'Fichiers refusés' : 'Fichier refusé'} : ${refuses.join(', ')} (acceptés : images, fichiers texte — code, JSON, HTML, CSV… — et archives zip, 7z, rar, tar, gz)`);
+  }
+
+  // 📎 : galerie, appareil photo ou fichiers (sur téléphone, les captures d'écran ne passent pas
+  // par le presse-papiers)
+  const choixFichiers = document.getElementById('choix-fichiers');
+  document.getElementById('joindre').onclick = () => choixFichiers.click();
+  choixFichiers.onchange = () => {
+    const fichiers = [...choixFichiers.files];
+    choixFichiers.value = '';
+    if (fichiers.length) ajouterPieces(fichiers);
+  };
+
+  // Collage et dépôt dans la zone de texte
   const imagesDuHtml = html => [...(html || '').matchAll(/<img[^>]+src=["'](data:image\/[^"']+)["']/gi)].map(m => m[1]);
-  // Collage : images ajoutées à l'onglet ; du code est entouré de ``` ; le reste est collé tel quel
+  // Collage : images et fichiers ajoutés à l'onglet ; du code est entouré de ``` ; le reste est collé tel quel
   function surCollage(e) {
     const cd = e.clipboardData;
     if (!cd) return false;
     const texte = cd.getData('text/plain');
     const duHtml = imagesDuHtml(cd.getData('text/html'));
-    const fichiers = [...cd.files].filter(f => f.type.startsWith('image/'));
+    const fichiers = [...cd.files].filter(estImage), autres = [...cd.files].filter(f => !estImage(f));
     if (duHtml.length) Promise.all(duHtml.map(versBlob)).then(ajouterImages); // copié depuis cette appli : toutes les images
     else if (fichiers.length) ajouterImages(fichiers);
+    if (autres.length) { e.preventDefault(); ajouterPieces(autres); return true; } // fichier copié dans l'explorateur
     if (!texte) { if (duHtml.length || fichiers.length) { e.preventDefault(); return true; } return false; }
     const lignes = note.value.split('\n'), { estCode } = blocsDeCode(lignes);
     const [i] = pointer(lignes, note.selectionStart);
@@ -1952,10 +2158,10 @@
     return false; // collage normal par l'éditeur (dans un bloc qui deviendra peut-être une vignette)
   }
   function surDepot(e) {
-    const fichiers = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
-    if (!fichiers.length) return false;
+    const tous = [...e.dataTransfer.files];
+    if (!tous.length) return false;
     e.preventDefault();
-    ajouterImages(fichiers);
+    ajouterPieces(tous);
     return true;
   }
 
@@ -2072,15 +2278,6 @@
   document.getElementById('balise').onclick = boutonBalise;
   document.getElementById('modele').onclick = boutonModele;
 
-  // 🖼 : choisir des images dans la galerie (ou prendre une photo) — sur téléphone, les captures
-  // d'écran ne passent pas par le presse-papiers
-  const choixFichier = document.getElementById('fichier');
-  document.getElementById('image').onclick = () => choixFichier.click();
-  choixFichier.onchange = () => {
-    const fichiers = [...choixFichier.files].filter(f => f.type.startsWith('image/') || !f.type);
-    choixFichier.value = '';
-    if (fichiers.length) ajouterImages(fichiers);
-  };
 
   // Texte copié : sans éléments de liste vides ni espaces en fin de ligne (le code est laissé tel quel)
   function nettoyer(texte) {
@@ -2183,12 +2380,16 @@
 
   boutonCopier.onclick = async () => {
     if (suite) return copierImageSuivante();
-    const o = actif, { texte, retires } = nettoyer(note.value), images = imagesPretes(o);
-    const attendues = o.images.length + o.locales.length;
+    const o = actif, nettoye = nettoyer(note.value), retires = nettoye.retires, images = imagesPretes(o);
+    const { texte, fichiers, manquants, archives } = texteAvecFichiers(o, nettoye.texte);
+    const attendues = [...o.distantes, ...o.locales].filter(x => !x.f).length;
+    const avecFichiers = fichiers ? ` · ${fichiers} fichier${fichiers > 1 ? 's' : ''} inclus` : '';
+    const sansFichiers = (manquants ? ` · ${manquants} fichier${manquants > 1 ? 's' : ''} pas encore téléchargé${manquants > 1 ? 's' : ''} (non copié${manquants > 1 ? 's' : ''})` : '')
+      + (archives ? ` · ${archives > 1 ? `${archives} archives non copiées` : 'archive non copiée'} (Partager ou Télécharger)` : '');
     if (!images.length) {
       await copier(texte);
-      annoncer(attendues ? 'Images pas encore téléchargées : texte copié seul'
-        : texte ? `Copié ✓${retires ? ` · ${retires} partie${retires > 1 ? 's' : ''} vide${retires > 1 ? 's' : ''} ignorée${retires > 1 ? 's' : ''}` : ''}` : 'Note vide');
+      annoncer(attendues ? `Images pas encore téléchargées : texte copié seul${avecFichiers}${sansFichiers}`
+        : texte ? `Copié ✓${avecFichiers}${retires ? ` · ${retires} partie${retires > 1 ? 's' : ''} vide${retires > 1 ? 's' : ''} ignorée${retires > 1 ? 's' : ''}` : ''}${sansFichiers}` : 'Note vide');
       return;
     }
     if (tactile && peutPartagerFichiers) {
@@ -2205,7 +2406,7 @@
     await copier(texte);
     boutonCopier.textContent = `🖼 1/${images.length}`;
     minuteurSuite = setTimeout(finirSuite, 120000);
-    annoncer(`Texte copié ✓ · ensuite : 🖼 1/${images.length}${images.length < attendues ? ' (images en téléchargement)' : ''}`);
+    annoncer(`Texte copié ✓${avecFichiers} · ensuite : 🖼 1/${images.length}${images.length < attendues ? ' (images en téléchargement)' : ''}${sansFichiers}`);
   };
 
   // Coller : texte au curseur (code entouré de ```), images ajoutées à l'onglet
@@ -2236,11 +2437,11 @@
   // Effacer : un appui demande confirmation ; un double appui efface tout de suite.
   // Dans les deux cas, « Annuler » pendant 5 s rend le texte et les images.
   function effacerOnglet(o) {
-    const ids = [...o.images, ...o.locales].map(x => x.id).filter(id => !o.masquees.has(id));
+    const ids = [...o.distantes, ...o.locales].map(x => x.id).filter(id => !o.masquees.has(id));
     const avaitTexte = !!note.value;
     if (avaitTexte) remplacer(0, note.value.length, ''); // annulable (historique de l'éditeur)
     const rendreTexte = () => { if (avaitTexte && o === actif && !note.value) CM.undo(vue); };
-    supprimerImagesDiffere(o, ids, 'Effacé', rendreTexte);
+    supprimerPiecesDiffere(o, ids, 'Effacé', rendreTexte);
   }
   let attenteEffacer = null;
   document.getElementById('effacer').onclick = () => {
@@ -2248,9 +2449,11 @@
     if (attenteEffacer) { clearTimeout(attenteEffacer); attenteEffacer = null; effacerOnglet(o); return; }
     attenteEffacer = setTimeout(async () => {
       attenteEffacer = null;
-      const n = [...o.images, ...o.locales].filter(x => !o.masquees.has(x.id)).length;
-      if (!note.value && !n) return;
-      const quoi = [note.value && 'le texte', n && `${n} image${n > 1 ? 's' : ''}`].filter(Boolean).join(' et ');
+      const restants = [...o.distantes, ...o.locales].filter(x => !o.masquees.has(x.id));
+      const n = restants.filter(x => !x.f).length, nf = restants.length - n;
+      if (!note.value && !restants.length) return;
+      const quoi = [note.value && 'le texte', n && `${n} image${n > 1 ? 's' : ''}`, nf && `${nf} fichier${nf > 1 ? 's' : ''}`]
+        .filter(Boolean).join(', ').replace(/, ([^,]*)$/, ' et $1');
       const r = await popup({
         message: `Effacer ${quoi} de « ${titre(o)} » sur tous les appareils ? (Astuce : un double appui sur Effacer efface sans demander.)`,
         boutons: [{ texte: 'Annuler', classe: 'annuler', valeur: false }, { texte: 'Effacer', classe: 'principal', valeur: true }],
@@ -2276,8 +2479,8 @@
   const supprimer = url => fetch(url, { method: 'PUT', body: 'null' }).then(r => { if (!r.ok) throw new Error(r.status); });
   const INDEX_TOUS = EMPLACEMENTS.flatMap(n => ['i' + n, 'ti' + n]); // appli normale et page de test
 
-  function oublierImagesLocales() {
-    imagesCompletes.clear();
+  function oublierPiecesLocales() {
+    contenus.clear();
     onglets.forEach(o => {
       o.locales.forEach(x => { x.supprimee = true; });
       o.locales = [];
@@ -2287,17 +2490,17 @@
   }
 
   // Toutes les images de ce bloc-notes (les deux espaces), y compris celles qu'aucun index ne cite plus
-  async function viderImages() {
+  async function viderPieces() {
     await supprimer(`${base}/images/${cle}.json`);
     await Promise.all(INDEX_TOUS.map(n => supprimer(`${base}/notes/${cle}/${n}.json`)));
-    oublierImagesLocales();
+    oublierPiecesLocales();
   }
 
   // Tout ce bloc-notes : notes, noms et images, de l'appli normale et de la page de test
   async function toutEffacer() {
     await supprimer(`${base}/images/${cle}.json`);
     await supprimer(`${base}/notes/${cle}.json`);
-    oublierImagesLocales();
+    oublierPiecesLocales();
     onglets.forEach(o => {
       clearTimeout(o.minuteur);
       o.etag = null;
@@ -2316,7 +2519,7 @@
       valeurChamp: lienSecret(cle),
       boutons: [
         { texte: `Thème : ${{ auto: 'auto', clair: 'clair', sombre: 'sombre' }[themeActuel()]}`, valeur: 'theme' },
-        { texte: 'Supprimer les images', classe: 'danger', valeur: 'images' },
+        { texte: 'Supprimer images et fichiers', classe: 'danger', valeur: 'images' },
         { texte: 'Tout effacer', classe: 'danger', valeur: 'tout' },
         { texte: 'Fermer', classe: 'annuler', valeur: false },
         { texte: 'Copier le lien', classe: 'principal', valeur: 'lien' },
@@ -2339,20 +2542,20 @@
     const tout = r.valeur === 'tout';
     const ok = await popup({
       message: tout
-        ? 'Tout effacer ? Les notes, les noms d\'onglets et les images de ce bloc-notes seront supprimés de la base, sur tous les appareils (appli normale comprise). C\'est définitif.'
-        : 'Supprimer toutes les images de ce bloc-notes, sur tous les appareils (appli normale comprise) ? Le texte des notes est conservé.',
+        ? 'Tout effacer ? Les notes, les noms d\'onglets, les images et les fichiers de ce bloc-notes seront supprimés de la base, sur tous les appareils (appli normale comprise). C\'est définitif.'
+        : 'Supprimer toutes les images et tous les fichiers joints de ce bloc-notes, sur tous les appareils (appli normale comprise) ? Le texte des notes est conservé.',
       boutons: [{ texte: 'Annuler', classe: 'annuler', valeur: false }, { texte: tout ? 'Tout effacer' : 'Supprimer', classe: 'principal', valeur: true }],
     });
     if (!ok.valeur) return;
     try {
-      await (tout ? toutEffacer() : viderImages());
+      await (tout ? toutEffacer() : viderPieces());
       annoncer(tout ? 'Base vidée' : 'Images supprimées');
     } catch {
       annoncer('Échec : réseau, ou règles Firebase pas encore mises à jour');
     }
   };
 
-  onglets.forEach(telechargerImages);
+  onglets.forEach(telechargerPieces);
   choisir(actif);
   lireNoms();
   onglets.forEach(o => { if (aEnvoyer(o)) envoyer(o); });

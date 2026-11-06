@@ -6,7 +6,7 @@ captures d'écran. Aucune authentification : un lien secret donne accès au bloc
 
 <https://vian31.github.io/note/> — « Ajouter à l'écran d'accueil » pour l'installer.
 
-**Version actuelle : v0.6.2** (dans le titre de la page et en tête de ⚙ Réglages : vérifier que chaque appareil a la même ;
+**Version actuelle : v0.9** (dans le titre de la page et en tête de ⚙ Réglages : vérifier que chaque appareil a la même ;
 sinon, fermer et rouvrir l'appli, ou Ctrl+F5 sur PC).
 
 GitHub Pages ne sert que des fichiers statiques : la synchronisation passe par une
@@ -18,7 +18,7 @@ GitHub Pages ne sert que des fichiers statiques : la synchronisation passe par u
   5 s), glisser pour réordonner (souris ; au doigt : appui long puis glisser), toucher l'onglet
   affiché pour le renommer sur place ; sans nom, le titre est la 1re ligne de la note. L'onglet
   affiché montre son titre en entier, les autres se serrent. Ordre synchronisé entre appareils.
-- **Barre** : mise en forme `•` `1.` `</>` `🖼` Balise Modèle, puis actions Effacer Copier Coller
+- **Barre** : mise en forme `•` `1.` `</>` `📎` Balise Modèle, puis actions Effacer Copier Coller
   (deux rangées sur téléphone, une seule à gauche/droite sur PC) ; ⚙ réglages et point d'état
   en haut. Sur PC, colonne centrée.
 - **Listes** : `- ` et `1. ` (texte brut Markdown, que Claude comprend). Deux niveaux au plus :
@@ -45,20 +45,32 @@ GitHub Pages ne sert que des fichiers statiques : la synchronisation passe par u
   un long collage hors balise demande un nom (`log` ou `document` proposé selon le contenu ;
   « Sans balise » colle tel quel) ; un long code est entouré de ``` et replié. Un bloc qui
   dépasse le seuil pendant qu'on tape dedans reste déplié.
-- **Images** : Ctrl+V d'une capture (Win+Maj+S), glisser-déposer, Coller, ou 🖼 (galerie /
-  appareil photo). Vignettes synchronisées ; toucher une vignette : agrandir, copier, supprimer.
+- **Pièces jointes 📎** : un seul bouton pour les images (galerie, appareil photo), les fichiers
+  texte et les archives ; aussi par glisser-déposer, ou Ctrl+V d'une capture (Win+Maj+S) ou d'un
+  fichier copié dans l'explorateur. Synchronisées sur tous les appareils, 10 images et 10 fichiers
+  au plus par onglet.
+  - **Images** : vignettes ; toucher une vignette : agrandir, copier, supprimer.
+  - **Fichiers texte** (code, `.txt`, `.json`, `.html`, `.js`, `.md`, `.csv`, `.svg`…, 1 Mo au plus) :
+    carte 📄 ; leur contenu est **inclus dans Copier**, après la note, dans
+    `<document nom="…">…</document>`. Toucher la carte : Télécharger, Partager (téléphone), Copier le
+    contenu, Insérer dans la note, Supprimer.
+  - **Archives** (`.zip`, `.7z`, `.rar`, `.tar`, `.gz`, `.tgz`, `.bz2`, `.xz`, `.zst`, 10 Mo au plus) :
+    carte 🗜 avec la progression de l'envoi ; téléchargées seulement quand on les ouvre sur les autres
+    appareils ; Télécharger, Partager, Supprimer. Non incluses dans Copier (le message le signale).
+    Pour un gros fichier, Partager ou Télécharger évite les collages coupés par le presse-papiers.
+  - PDF et autres fichiers binaires refusés.
 - **Copier** : texte nettoyé (sans éléments de liste vides ni espaces en fin de ligne ; le code est
   laissé tel quel). Avec des images, en plusieurs fois, car Claude ne prend qu'un contenu à la fois
   dans le presse-papiers : le texte, puis le bouton devient `🖼 1/2`, `🖼 2/2`… et chaque appui
   copie l'image suivante. Sur téléphone, **Partager tout** envoie texte et images d'un coup vers
   l'appli Claude (Claude Code n'apparaît pas dans le partage : utiliser Une par une).
 - **Coller** : texte au curseur, images ajoutées à l'onglet.
-- **Effacer** : texte et images de l'onglet, sur tous les appareils. Un appui demande confirmation,
+- **Effacer** : texte, images et fichiers de l'onglet, sur tous les appareils. Un appui demande confirmation,
   un **double appui** efface tout de suite ; dans les deux cas, **Annuler** (5 s) rend tout.
-- **Croix** sur chaque vignette : supprime l'image tout de suite (Annuler pendant 5 s).
+- **Croix** sur chaque vignette ou carte : supprime l'image ou le fichier tout de suite (Annuler pendant 5 s).
 - **Fenêtres** : Annuler en rouge juste avant OK (bleu).
-- **Réglages ⚙** : thème (auto, clair, sombre), lien secret, **Supprimer les images** (toutes,
-  texte conservé), **Tout effacer** (notes, noms et images du bloc-notes).
+- **Réglages ⚙** : thème (auto, clair, sombre), lien secret, **Supprimer images et fichiers**
+  (tous, texte conservé), **Tout effacer** (notes, noms, images et fichiers du bloc-notes).
 
 Un texte collé n'est jamais interprété (les lignes `* `, `- `, `1.` d'un code collé restent
 intactes), y compris avec les claviers qui envoient un collage ligne par ligne.
@@ -90,30 +102,21 @@ les règles Firebase interdisent de lister la base.
   En cas d'écritures simultanées, les modifications sont fusionnées si elles touchent des
   endroits différents ; sinon la version locale l'emporte.
 - Le texte non envoyé est conservé sur l'appareil (hors ligne, fermeture) et envoyé dès que possible.
-- Images : réduites à 1568 px en WebP (~50–120 Ko), découpées en morceaux de texte dans Firebase
-  (même domaine et même format que les notes : passe les proxys) ; après un échec, morceaux
-  deux fois plus petits. Un petit index par onglet (avec vignettes) est synchronisé ; les images
-  complètes sont téléchargées une fois puis gardées sur l'appareil.
+- Pièces jointes : découpées en morceaux de texte dans Firebase (même domaine et même format que
+  les notes : passe les proxys) ; après un échec, morceaux deux fois plus petits. Images réduites à
+  1568 px en WebP (~50–120 Ko) ; fichiers texte tels quels ; archives en base64. Un petit index par
+  onglet (vignettes, noms, tailles) est synchronisé ; les contenus sont téléchargés une fois puis
+  gardés sur l'appareil (les archives seulement à l'ouverture).
 
 ## Technique
 
 - **Éditeur** : [CodeMirror 6](https://codemirror.net) (licence MIT, voir
-  `lib/LICENSE-codemirror.txt`), empaqueté dans `lib/codemirror.js` et servi par le même site
+  `lib/LICENSE-codemirror.txt`), empaqueté dans `lib/codemirror-2.js` et servi par le même site
   (rien à autoriser sur un proxy). Ctrl+Z ne défait jamais une modification venue d'un autre
   appareil ; historique par onglet.
 - **Règles Firebase** (`database.rules.json`) : notes `notes/<clé>/{1…10}`, noms `n1…`, index
-  d'images `i1…`, ordre des onglets `ordre` ; images `images/<clé>/<id>/<morceau>`. Sur un bloc-notes entier, seule la
+  des pièces jointes `i1…`, ordre des onglets `ordre` ; contenus des pièces jointes
+  `images/<clé>/<id>/<morceau>`. Sur un bloc-notes entier, seule la
   suppression est autorisée.
-- **Page de test (v0.9) : pièces jointes.** Un seul bouton **📎** (remplace 🖼) pour les images
-  (galerie, appareil photo), les fichiers texte et les archives ; aussi par glisser-déposer ou Ctrl+V
-  d'un fichier copié dans l'explorateur.
-  - **Fichiers texte** : code, `.txt`, `.json`, `.html`, `.js`, `.md`, `.csv`, `.svg`… (1 Mo au plus).
-    **Copier** ajoute leur contenu après la note, dans `<document nom="…">…</document>`. Carte 📄 :
-    Télécharger, Partager (téléphone), Copier le contenu, Insérer dans la note, Supprimer.
-  - **Archives** : `.zip`, `.7z`, `.rar`, `.tar`, `.gz`, `.tgz`, `.bz2`, `.xz`, `.zst` (10 Mo au plus).
-    Carte 🗜 avec progression de l'envoi ; téléchargées seulement à l'ouverture sur les autres
-    appareils ; Télécharger, Partager, Supprimer. Non incluses dans Copier (le message le signale).
-  - 10 fichiers au plus par onglet ; PDF et autres binaires refusés. Rangés comme les images
-    (mêmes règles Firebase).
 - **Page de test** : <https://vian31.github.io/note/test.html>, même code avec ses données rangées
   à part (`t1…`, `tn1…`, `ti1…`), pour essayer une nouveauté sans toucher aux vraies notes.
